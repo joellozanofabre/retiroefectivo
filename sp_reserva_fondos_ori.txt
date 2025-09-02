@@ -1,0 +1,1197 @@
+cob_cuentas
+go
+
+create proc dbo.sp_reserva_fondos 
+
+(
+	@s_ssn                int,
+	@s_srv                varchar(30),
+	@s_lsrv               varchar(30),
+	@s_user               varchar(30),
+	@s_sesn               int,
+	@s_term               varchar(10),
+	@s_date               datetime,
+        @s_org		      char(1),
+	@s_ofi                smallint,    /* Localidad origen transaccion */
+	@s_rol                smallint = 1,
+	@s_org_err            char(1) = null, /* Origen de error:[A], [S] */
+	@s_error              int = null,
+	@s_sev                tinyint = null,
+	@s_msg                mensaje = null,
+        @s_ssn_branch         int = null,
+        @s_servicio           tinyint = null,
+	@t_debug              char(1) = 'N',
+	@t_file               varchar(14) = null,
+	@t_from               varchar(32) = null,
+	@t_corr               char(1) = 'N',
+	@t_rty                char(1) = 'N',
+	@t_trn		      smallint,
+	@t_ejec		      char(1) = 'N',
+        @t_ssn_corr     int = null,
+        @p_lssn         int = null,
+        @p_rssn         int = null,
+        @p_rssn_corr    int = null,
+	@i_cta		      cuenta,
+	@i_mon		      tinyint,
+	@i_accion	      char(1),
+	@i_causa	      char(1) = null,
+        @i_valor	      money = null,
+	@i_aut		      descripcion = null,
+	@i_solicita	      descripcion = null,
+	@i_plazo	      smallint = null,
+        @i_cheque             int = null,
+        @i_tipo               char(1),
+        @i_reserva            int = 0,
+        @i_num_reserva        int = 0,
+        @i_val_reservar       money = 0,
+	@i_comision	      money = 0,
+	@i_sec_his	      int = 0,
+	@i_chq_certi	      char(1) = 'N' ,
+	@i_motivo	      tinyint = 0,
+	@i_tarjeta	      cuenta = '000000000000000',
+        @o_oficina            smallint = null out,
+	@o_cod_error	      int = 0 out,       --Agregar (=0) JRPC 05-02-1999
+	@o_reserva	      int = 0 out,
+	@o_saldo_para_girar_antes money = null out
+)
+as
+declare @w_return               int,
+	@w_sp_name              varchar(30),
+	@w_ctacte		int,
+        @w_est			char(1),
+	@w_filial		tinyint,
+	@w_num_bloqueos 	smallint,
+	@w_secuencial		int,
+        @w_reserva              int,
+	@w_monto_bloq		money,
+	@w_saldo_para_girar	money,
+	@w_saldo_contable	money,
+        @w_mon                  int,
+        @w_tipo                 char,
+        @w_valor                money,
+        @w_cheque               int,
+        @w_tipo_bloqueo         char(1),
+        @w_mensaje              mensaje,
+        @w_cont                 tinyint,
+        @w_dias_rva             tinyint,
+        @w_ciudad               smallint,
+        @w_fecha_lib            datetime,
+        @w_num_reserva          int,
+        @w_cr_fecha             datetime,
+        @w_cr_fecha_lib         datetime,
+        @w_chequera             int,
+	@w_ch_estado            char(1) ,
+        @w_cheque_ini           int,
+        @w_chequeras            smallint,
+        @w_estado_actual        char(1),
+        @w_estado_anterior      char(1),
+        @w_causa_np             char(3),
+        @w_clase_np             char(1),
+        @w_valor_np         	money,
+        @w_prod_banc            int,
+        @w_nombre               char(108),
+        @w_produ                tinyint,
+        @w_valor_chq            money,
+	   @w_tabla			  varchar(30),
+       @w_estado_cheque        char(1),
+       @w_disponible            money,
+        @w_servicio	            varchar(3),
+        @w_trn_sus              int,
+        @w_nuevo_saldo          money,
+        @w_valor_aprobado       money,
+        @w_factor	            int,
+        @w_reversa              char(1),
+        @w_disponible_rever     money,
+        @w_secu_reserv          int,
+	@w_cliente		int,
+	@w_tipotarjeta		char(3),
+	@w_bandera_tipocliente	int,
+	@w_bandera_tipotarjeta	int,
+	@w_bandera_prodbanc	int,
+	@w_bandera_sobregiro	int,
+	@w_saldo_para_girar_antes money
+
+
+
+
+/* Captura del nombre del Stored Procedure */
+select @w_sp_name = 'sp_reserva_fondos' ,
+       @w_estado_cheque = null
+
+if  @t_trn not in (2657,2658,2706)
+begin
+  /* Error en codigo de transaccion */
+   exec cobis..sp_cerror
+	   @t_debug     = @t_debug,
+	   @t_file      = @t_file,
+	   @t_from      = @w_sp_name,
+	   @i_num	= 201048
+   select @o_cod_error = 201048
+   return 201048
+end
+
+select	@w_cliente	= cc_cliente,
+	@w_ctacte	= cc_ctacte,
+	@w_est		= cc_estado,
+        @o_oficina	= cc_oficina,
+        @w_cheque_ini	= cc_cheque_inicial,
+        @w_chequeras	= cc_chequeras,
+        @w_prod_banc	= cc_prod_banc,
+        @w_produ	= cc_producto,
+        @w_nombre	= cc_nombre,
+        @w_disponible	= cc_disponible
+  from	cob_cuentas..cc_ctacte
+ where	cc_cta_banco = @i_cta
+   and	cc_moneda    = @i_mon
+-- and  cc_estado   != 'G'     /*Se pueden reservar fondos para CHQG. */
+
+if @@rowcount != 1
+begin
+  /* No existe cuenta_banco */
+   exec cobis..sp_cerror
+           @t_debug     = @t_debug,
+           @t_file      = @t_file,
+           @t_from      = @w_sp_name,
+           @i_num       = 201004
+   select @o_cod_error = 201004
+   return 201004
+end
+
+-- Validaciones
+if @w_est not in ('A','G')
+begin
+-- Cuenta no activa o cancelada
+   exec cobis..sp_cerror
+           @t_debug     = @t_debug,
+           @t_file      = @t_file,
+           @t_from      = @w_sp_name,
+           @i_num       = 201005
+   select @o_cod_error = 201005
+   return 201005
+end
+
+if @i_accion not in ('R', 'E')
+begin
+-- No existe tipo de accion
+   exec cobis..sp_cerror
+	   @t_debug     = @t_debug,
+	   @t_file      = @t_file,
+	   @t_from      = @w_sp_name,
+	   @i_num	= 251019
+   select @o_cod_error = 251019
+   return 251019
+end
+
+   if @s_servicio = 1
+      select @s_user = "interfaz-NB"
+
+   if @s_servicio = 2
+      select @s_user = "interfaz-TB"
+
+
+
+
+if @i_accion = 'E'
+begin
+
+	--Validacion de Banca Electronica
+	select @i_tipo = cr_tipo
+	from cc_cuenta_reservada
+	where cr_ctacte = @w_ctacte
+	  and cr_cheque     = @i_cheque
+	  and @i_valor      = round (cr_valor,2)
+	  and cr_estado     = 'R'
+	  and cr_moneda     = @i_mon
+	  and cr_secuencial = @i_reserva
+
+	if (@s_ofi = 76 and @i_tipo not in ('T','E'))
+	or (@s_ofi <> 76 and @i_tipo in ('T','E') )
+	begin
+
+	 -- No puede eliminar ese tipo de reserva
+	  exec cobis..sp_cerror
+	   @t_debug     = @t_debug,
+	   @t_file      = @t_file,
+	   @t_from      = @w_sp_name,
+	   @i_num	= 201213
+	   return 201213
+	end
+end
+
+-- Calculo del saldo contable y saldo para girar de la cuenta
+
+exec @w_return = cob_cuentas..sp_calcula_saldo
+	@t_debug	    = @t_debug,
+	@t_file		    = @t_file,
+	@t_from		    = @w_sp_name,
+	@i_cuenta	    = @w_ctacte,
+	@i_fecha	    = @s_date,
+	@i_ofi	    	    = @s_ofi,
+        @o_saldo_para_girar = @w_saldo_para_girar out,
+	@o_saldo_contable   = @w_saldo_contable out
+if @w_return != 0
+      return @w_return
+
+
+if @w_prod_banc in (13, 18)
+  begin
+      exec cobis..sp_cerror
+           @t_debug     = @t_debug,
+           @t_file      = @t_file,
+           @t_from      = @w_sp_name,
+           @i_num       = 202000
+       return  202000
+  end
+
+-- Transaccion de levantamiento de bloqueos a la cuenta
+if (@t_trn = 2658 or @t_trn = 2706)
+begin
+-- Generacion del secuencial para la insercion en la tabla cc_his_reserva
+   if @s_user <> "interfaz"
+   begin
+   	if @i_chq_certi = 'S'
+	   select @w_tabla='cc_his_reserva_chq_certi'
+	else
+	   select @w_tabla='cc_his_reserva'
+
+	exec @w_return = cobis..sp_cseqnos
+	          @t_debug        = @t_debug,
+	          @t_file         = @t_file,
+	          @t_from         = @w_sp_name,
+	          @i_tabla        = @w_tabla,
+	          @o_siguiente    = @w_secuencial out
+	if @w_return != 0
+	    return @w_return
+   end
+   else
+      select @w_secuencial = @i_sec_his
+
+   if @i_chq_certi = 'S'
+	  Select @w_ctacte      = cr_ctacte,
+	        @w_cheque       = cr_cheque,
+	        @w_valor        = cr_valor,
+	        @w_mon          = cr_moneda,
+	        @w_tipo         = cr_tipo,
+	        @w_reserva      = cr_secuencial,
+	        @w_num_reserva  = cr_num_reserva,
+	        @w_cr_fecha     = cr_fecha,
+	        @w_cr_fecha_lib = cr_fecha_lib
+	  from cob_cuentas..cc_chq_certi_reservado
+	  where cr_ctacte = @w_ctacte
+	    and cr_cheque = @i_cheque
+	    and cr_secuencial = @i_reserva
+   else
+	 Select @w_ctacte       = cr_ctacte,
+	        @w_cheque       = cr_cheque,
+	        @w_valor        = cr_valor,
+	        @w_mon          = cr_moneda,
+	        @w_tipo         = cr_tipo,
+	        @w_reserva      = cr_secuencial,
+	        @w_num_reserva  = cr_num_reserva,
+	        @w_cr_fecha     = cr_fecha,
+	        @w_cr_fecha_lib = cr_fecha_lib
+	  from cob_cuentas..cc_cuenta_reservada
+	  where cr_ctacte = @w_ctacte
+	    and cr_cheque = @i_cheque
+	    and cr_secuencial = @i_reserva
+
+    If @@rowcount != 1
+	 begin
+	 -- No existe reserva de fondos
+	     exec cobis..sp_cerror
+	      @t_debug = @t_debug,
+	      @t_file = @t_file,
+	      @t_from = @w_sp_name,
+	      @i_num = 208046
+	     select @o_cod_error = 208046
+	     return 208046
+     end
+
+
+
+	if @i_val_reservar = 0
+	begin
+		begin tran
+	   -- Insercion de eliminacion en la tabla historica de reservas */
+	   if @i_chq_certi = 'S'
+		   insert into cc_his_reserva_chq_certi
+							(hr_ctacte, hr_secuencial, hr_cheque,
+							 hr_reserva, hr_valor, hr_moneda,
+							 hr_fecha, hr_fecha_res, hr_fecha_lib,
+							 hr_num_reserva, hr_estado,
+							 hr_autorizante, hr_tipo, hr_ofi_solic, hr_observacion)
+					 values (@w_ctacte, @w_secuencial, @w_cheque,
+							 @w_reserva,  @w_valor, @w_mon,
+							 @s_date, @w_cr_fecha, @s_date,
+							 @w_num_reserva, 'E',
+							 @s_user, @w_tipo, @s_ofi, @i_solicita)
+		else
+			insert into cc_his_reserva
+							(hr_ctacte, hr_secuencial, hr_cheque,
+							 hr_reserva, hr_valor, hr_moneda,
+							 hr_fecha, hr_fecha_res, hr_fecha_lib,
+							 hr_num_reserva, hr_estado,
+							 hr_autorizante, hr_tipo, hr_ofi_solic, hr_observacion)
+					 values (@w_ctacte, @w_secuencial, @w_cheque,
+							 @w_reserva,  @w_valor, @w_mon,
+							 @s_date, @w_cr_fecha, @s_date,
+							 @w_num_reserva, 'E',
+							 @s_user, @w_tipo, @s_ofi, @i_solicita)
+		  if @@error != 0
+		  begin
+			  /* Error en creacion de registro en cc_his_reserva */
+			  exec cobis..sp_cerror
+					@t_debug      = @t_debug,
+					@t_file       = @t_file,
+					@t_from       = @w_sp_name,
+					@i_num        = 208045
+			  select @o_cod_error = 208045
+			  return 208045
+		  end
+
+		if exists( select 1 from cob_remesas..re_control_otorg_avansal
+				where co_ctacte = @w_ctacte
+				  and co_cobrada = 'N'
+				  and co_correccion = 'N'
+				  and co_secuencial_vsuspenso = @i_reserva
+				  and co_tipo = 'R' )
+		begin
+		   update cob_remesas..re_control_otorg_avansal
+			  set co_correccion = 'E'
+			where co_ctacte = @w_ctacte
+			  and co_cobrada = 'N'
+			  and co_correccion = 'N'
+			  and co_secuencial_vsuspenso = @i_reserva
+			  and co_tipo = 'R'
+		   if @@error != 0 or @@rowcount <> 1
+			 begin
+			  exec cobis..sp_cerror
+				@t_debug      = @t_debug,
+				@t_file       = @t_file,
+				@t_from       = @w_sp_name,
+				@i_num        = 258062
+			  return 258062
+			 end
+		end
+
+	   -- Creacion de transaccion de servicio
+		  insert into cob_cuentas..cc_tsbloqueo_valor
+						  (secuencial, tipo_transaccion, tsfecha,
+						   usuario, terminal, oficina, reentry, origen,
+						   cta_banco, fecha, valor, accion, causa,
+						   autorizante, moneda, hora, solicitante, fecha_vencim,
+						   oficina_cta, alterno)
+				   values (@s_ssn, @t_trn, @s_date,
+						   @s_user, @s_term, @s_ofi, @t_rty, @s_org,
+						   @i_cta, @s_date, @i_valor, 'E', @i_causa,
+						   @i_aut, @w_mon, getdate(), @i_solicita, @w_cr_fecha_lib,
+						   @o_oficina, @w_secuencial)
+
+		  if @@error != 0
+		  begin
+		  -- Error en creacion de transaccion de servicio
+			  exec cobis..sp_cerror
+						 @t_debug    = @t_debug,
+						 @t_file     = @t_file,
+						 @t_from     = @w_sp_name,
+						 @i_num      = 203005
+			  select @o_cod_error = 203005
+			  return 203005
+		  end
+		 if @i_chq_certi = 'S'
+		   delete cob_cuentas..cc_chq_certi_reservado
+			where cr_ctacte = @w_ctacte
+			  and cr_secuencial = @i_reserva
+			  and cr_cheque = @i_cheque
+		 else
+			delete cob_cuentas..cc_cuenta_reservada
+			where cr_ctacte = @w_ctacte
+			  and cr_secuencial = @i_reserva
+			  and cr_cheque = @i_cheque
+		 if @@error != 0
+		   begin
+		   -- Error en creacion en eliminacion de reservas
+			  exec cobis..sp_cerror
+							 @t_debug    = @t_debug,
+							 @t_file     = @t_file,
+							 @t_from     = @w_sp_name,
+							 @i_num      = 208050
+			  select @o_cod_error = 208050
+			  return 208050
+		   end
+	   commit tran
+	   return 0
+	end
+
+    else begin  /* Reverso parcial de reserva para ATM-POS*/
+    begin tran
+    select @i_valor = @i_val_reservar
+
+    update cob_cuentas..cc_cuenta_reservada
+    set cr_valor = @i_valor
+    where cr_ctacte = @w_ctacte
+      and cr_secuencial = @i_reserva
+      and cr_cheque = @i_cheque
+
+      if @@error != 0
+      begin
+      -- Error en creacion de registro en cc_cuenta_reservada
+	  exec cobis..sp_cerror
+		@t_debug      = @t_debug,
+		@t_file       = @t_file,
+		@t_from       = @w_sp_name,
+		@i_num        = 208050
+	  select @o_cod_error = 208050
+	  return 208050
+      end
+    update cc_his_reserva
+    set hr_valor = @i_valor
+    where hr_ctacte = @w_ctacte
+      and hr_secuencial = @w_num_reserva
+      and hr_cheque = @i_cheque
+
+      	if @@error != 0 or @@rowcount <> 1
+      	begin
+      	-- Error en creacion de registro en cc_his_reserva
+        exec cobis..sp_cerror
+                @t_debug      = @t_debug,
+                @t_file       = @t_file,
+                @t_from       = @w_sp_name,
+                @i_num        = 208045
+        select @o_cod_error = 208045
+        return 208045
+      	end
+
+	if exists( select 1 from cob_remesas..re_control_otorg_avansal
+	    where co_ctacte = @w_ctacte
+	      and co_cobrada = 'N'
+	      and co_correccion = 'N'
+	      and co_secuencial_vsuspenso = @i_reserva
+	      and co_tipo = 'R' )
+	begin
+	   update cob_remesas..re_control_otorg_avansal
+	      set co_valor_otorgado = @i_valor
+	    where co_ctacte = @w_ctacte
+	      and co_cobrada = 'N'
+	      and co_correccion = 'N'
+	      and co_secuencial_vsuspenso = @i_reserva
+	      and co_tipo = 'R'
+	   if @@error != 0 or @@rowcount <> 1
+	     begin
+		  exec cobis..sp_cerror
+			@t_debug      = @t_debug,
+			@t_file       = @t_file,
+			@t_from       = @w_sp_name,
+			@i_num        = 258062
+		  return 258062
+	     end
+	end
+     
+     update cc_tran_servicio
+     set ts_valor = @i_valor
+     where ts_tipo_transaccion = @t_trn - 1
+       and ts_secuencial = @t_ssn_corr
+       and ts_cod_alterno = @w_reserva
+
+       	if @@error != 0 or @@rowcount <> 1
+      	begin
+      	-- Error en creacion de transaccion de servicio
+        exec cobis..sp_cerror
+                  @t_debug       = @t_debug,
+                  @t_file        = @t_file,
+                  @t_from        = @w_sp_name,
+                  @i_num         = 203005
+        select @o_cod_error = 203005
+        return 203005
+      	end
+   commit tran
+   return 0
+ end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Transaccion de reserva de fondos por valor a la cuenta
+if @t_trn = 2657
+begin
+begin tran
+   IF @w_est = 'G' and @i_cheque = 0
+   begin
+       exec cobis..sp_cerror
+                @t_debug        = @t_debug,
+                @t_file         = @t_file,
+                @t_from         = @w_sp_name,
+                @i_num          = 101010,
+                @i_sev          = 0,
+                @i_msg          = "SOLO SE PUEDE RESERVAR EN CONCEPTO DE CHEQUE"
+      return 101010
+   end
+
+   /****Validacion de bloqueo de retiros y movimientos ****/
+   select   @w_tipo_bloqueo = cb_tipo_bloqueo
+   from   cob_cuentas..cc_ctabloqueada
+   where   cb_cuenta = @w_ctacte
+   and   cb_tipo_bloqueo in ('3', '2')
+   and   cb_estado = 'V'
+   if @@rowcount != 0
+   begin
+        select @w_mensaje = rtrim (valor)
+        from cobis..cl_catalogo
+        where tabla = (select codigo from cobis..cl_tabla
+                        where tabla = 'cc_tbloqueo')
+        and codigo = @w_tipo_bloqueo
+        select @w_mensaje = 'Cuenta bloqueada: ' + @w_mensaje
+        exec cobis..sp_cerror
+                @t_debug        = @t_debug,
+                @t_file         = @t_file,
+                @t_from         = @w_sp_name,
+                @i_num          = 201008,
+                @i_sev          = 1,
+                @i_msg          = @w_mensaje
+        return 201008
+   end
+   if @i_tipo = 'E'
+      select @w_valor = @i_valor + @i_comision
+   else
+      select @w_valor = @i_valor
+
+   if @w_est !="G"
+   begin
+     /*Buscar el estado del cheque si lo hubiera*/
+     select @w_estado_cheque = cq_estado_actual
+       from cob_cuentas..cc_cheque
+      where cq_cuenta        = @w_ctacte 
+        and cq_cheque        = @i_cheque 
+
+
+        select @w_secu_reserv = 0
+        
+   --if @w_saldo_para_girar < @w_valor and @w_estado_cheque != 'C' /* Inicio: Anticipo de Salario o Anticipo Seguro */
+   if round(@w_saldo_para_girar,2) < round(@w_valor,2) and @w_estado_cheque != 'C' --LVanegas - PM-7980 Autorizaciones parciales
+     begin
+	if @i_tipo = 'E' /* Solo aplica para reservas ATM y POS */
+	   begin
+		select @w_tipotarjeta = ta_tipo_tarjeta
+		  from cob_atm..tm_tarjeta
+		 where ta_codigo = @i_tarjeta
+
+		/*Inicio Variables para Validacion Anticipo de Salario*/
+		select  @w_nuevo_saldo  = 0,	@w_valor_aprobado = 0,
+			@w_bandera_tipocliente = 0, @w_bandera_prodbanc = 0,
+			@w_bandera_tipotarjeta = 0, @w_bandera_sobregiro = 0
+
+
+		/*Validacion de Tipo Cliente, Tipo Tarjeta y Producto Bancario que aplica para Anticipo de Salario*/
+	if @w_prod_banc <> 21
+		begin
+			if exists ( select 1
+				      from cobis..cl_ente x
+				     where en_ente = @w_cliente
+				       and p_tipo_persona = ( select b.codigo
+								from cobis..cl_tabla a,
+								     cobis..cl_catalogo b
+							       where a.codigo = b.tabla
+								 and a.tabla  = 'cl_tipocliente_anticiposalario'
+								 and b.codigo = x.p_tipo_persona
+								 and b.estado = 'V' ) )
+				select @w_bandera_tipocliente = 1
+		end
+	else
+		begin
+			select @w_bandera_tipocliente = 1
+		end
+
+		if exists ( select 1
+			      from cobis..cl_tabla c,
+				   cobis..cl_catalogo d
+			     where c.codigo = d.tabla
+			       and c.tabla  = 'cl_tipotarjeta_anticiposalario'
+			       and d.codigo = @w_tipotarjeta
+			       and d.estado = 'V' )
+			select @w_bandera_tipotarjeta = 1
+
+		if exists ( select 1
+			      from cobis..cl_tabla e,
+				   cobis..cl_catalogo f
+			     where e.codigo = f.tabla
+			       and e.tabla  = 'cl_prodbanc_anticiposalario_cc'
+			       and f.codigo = convert(char,@w_prod_banc)
+			       and f.estado = 'V' )
+			select @w_bandera_prodbanc = 1
+
+		if not exists ( select 1
+				  from cob_cuentas..cc_sobregiro
+				 where sb_cuenta = @w_ctacte
+				   and sb_fecha_ven >= @s_date
+				   and sb_tipo = 'C' )
+			select @w_bandera_sobregiro = 1
+
+		if ( @w_bandera_tipocliente = 1 and 
+		     @w_bandera_tipotarjeta = 1 and
+		     @w_bandera_prodbanc = 1 and
+		     @w_bandera_sobregiro = 1 )
+		   begin
+			select 
+			@w_servicio	 = '822',
+			@w_trn_sus   = 2630
+
+			/* Modo de correccion */
+			if @t_corr = 'N'
+			begin
+			   select @w_factor = 1
+			end
+			else
+			begin
+			   select @w_factor = -1
+			end
+
+			execute cob_remesas..sp_avance_salario_x_tarj
+			    @s_ssn_branch       =   @s_ssn_branch,
+			    @s_ssn              =   @s_ssn,
+			    @s_srv              =   @s_srv,
+			    @s_user             =   @s_user,
+			    @s_date             =   @s_date,
+			    @s_ofi              =   @s_ofi,
+			    @t_corr             =   @t_corr,
+			    @t_ssn_corr         =   @t_ssn_corr,
+			    @t_trn              =   @t_trn,
+			    @t_rty              =   @t_rty,
+			    @i_bvirtual         =   'S',
+			    @i_term_tandem      =   0,
+			    @i_fecha_tandem     =   @s_date,
+			    @i_ssn_tandem       =   0,
+			    @i_ctacte           =   @w_ctacte,
+			    @i_cta              =   @i_cta,
+			    @i_val              =   @i_valor,
+			    @i_prod_banc        =   @w_prod_banc,
+			    @i_saldo_para_girar =   @w_saldo_para_girar,
+			    @i_factor           =   @w_factor,
+			    @i_servicio         =   @w_servicio,
+			    @i_cod_alterno      =   0,
+			    @i_trn_sus          =   @w_trn_sus,
+			    @i_mon              =   @i_mon,
+			    @i_oficina_cta      =   @o_oficina,
+			    @i_suspensos        =   0,
+			    @i_disponible       =   @w_disponible,
+			    @i_sec_reserva      =   @i_reserva,
+			    @o_cod_error        =   @o_cod_error        out,
+			    @o_saldo_para_girar =   @w_nuevo_saldo      out,
+			    @o_valor_aprobado   =   @w_valor_aprobado   out,
+			    @o_reversa          =   @w_reversa          out,
+			    @o_disponible       =   @w_disponible_rever out,
+			    @o_secu_reserv      =   @w_secu_reserv      out,
+			    @o_saldo_para_girar_antes = @w_saldo_para_girar_antes	out
+			
+			    if @o_cod_error = 0
+				select @w_saldo_para_girar = @w_nuevo_saldo
+		   end
+	   end
+     end /* Fin: Anticipo de Salario o Anticipo Seguro */
+
+       --if @w_saldo_para_girar < @w_valor and @w_estado_cheque != 'C' 
+       if round(@w_saldo_para_girar,2) < round(@w_valor,2) and @w_estado_cheque != 'C'  --LVanegas - PM-7980 Autorizaciones parciales
+       begin
+       	   /*I. LVanegas - PM-7980 Autorizaciones parciales*/
+       	    if @t_rty = 'N'
+	   	    begin
+				exec cobis..sp_cerror
+					 @t_debug   = @t_debug,
+					 @t_file    = @t_file,
+					 @t_from    = @w_sp_name,
+					 @i_num     = 201017
+			end
+			/*F. LVanegas - PM-7980 Autorizaciones parciales*/
+            rollback tran
+
+	 if @s_ofi = 76
+            begin
+               begin tran
+               exec monitor_byte..sp_control_lavado_dinero
+                    @t_trn        = @t_trn,
+                    @s_user       = @s_user,
+                    @s_date       = @s_date,
+                    @s_term       = @s_term,
+                    @i_cta        = @i_cta,
+                    @i_nomcta     = @w_nombre,
+                    @i_prod_banc  = @w_prod_banc,
+                    @s_ofi        = @s_ofi,
+                    @i_saldo_real = @w_saldo_contable,
+                    @i_producto   = @w_produ,
+                    @i_cheque     = @i_cheque,
+                    @i_num        = 201017
+               commit tran
+            end
+
+       -- Valor a reservar execede el saldo para girar
+           select @o_cod_error = 201017
+           return 201017
+       end
+   end
+
+
+
+
+
+/*****Validacion de que chequera este emitida por ARO MAY/05/1999 ****/
+if @i_cheque != 0      /***** JRPC MAY/06/1999 ****/
+begin
+  select @w_chequera  = ch_chequera,
+	 @w_ch_estado  = ch_estado
+   from cob_cuentas..cc_chequera
+   where ch_cuenta = @w_ctacte
+     and ch_inicial <= @i_cheque
+     and (ch_inicial + ch_numero) > @i_cheque
+     and ch_estado not in ('Z','M')
+
+   if @@rowcount = 0
+   begin
+   -- No Existe chequera para la Cuenta
+      exec cobis..sp_cerror
+         @t_debug  = @t_debug,
+         @t_file   = @t_file,
+         @t_from   = @w_sp_name,
+         @i_num    = 201006
+       return 201006
+   end
+end
+
+
+
+if @w_ch_estado != 'E'  and @i_cheque != 0 /***** JRPC MAY/14/1999 ****/
+begin
+     /* Chequera no Emitida */
+     exec cobis..sp_cerror
+             @t_debug  = @t_debug,
+             @t_file   = @t_file,
+             @t_from   = @w_sp_name,
+             @i_num    = 201110
+     return 201110
+end
+
+/*****FIN DE VALIDACION DE CHEQUERA ****/
+  if @i_cheque != 0
+  begin
+     if exists (Select *
+        from cob_cuentas..cc_cuenta_reservada
+        where cr_ctacte = @w_ctacte
+          and cr_cheque = @i_cheque) or exists(Select *
+        from cob_cuentas..cc_chq_certi_reservado
+        where cr_ctacte = @w_ctacte
+          and cr_cheque = @i_cheque)
+      begin
+      -- Error, ya existe reserva de fondos de ese cheque
+        exec cobis..sp_cerror
+	  @t_debug	 = @t_debug,
+	  @t_file	 = @t_file,
+	  @t_from	 = @w_sp_name,
+	  @i_num	 = 208044
+       select @o_cod_error = 208044
+       return 208044
+      end
+
+    /***Validacion del estado del cheque **/
+    exec @w_return = cob_cuentas..sp_valida_cheque
+        @t_debug           = @t_debug,
+        @t_file            = @t_file,
+        @t_from            = @w_sp_name,
+        @i_cuenta          = @w_ctacte,
+        @i_cta_banco       = @i_cta,
+        @i_cheque          = @i_cheque,
+        @i_cheque_ini      = @w_cheque_ini,
+        @i_chequeras       = @w_chequeras,
+        @i_val_cta         = 'N',
+        @i_valida_chq      = 'S',
+        @i_moneda          = @i_mon,
+        @i_monto           = @i_valor,
+        @o_estado_actual   = @w_estado_actual out,
+        @o_estado_anterior = @w_estado_anterior out,
+        @o_causa_np        = @w_causa_np out,
+        @o_clase_np        = @w_clase_np out,
+        @o_valor           = @w_valor_np out
+
+     if @w_return <> 0
+        return @w_return
+
+     select @w_valor_chq = cq_valor
+       from cob_cuentas..cc_cheque
+      where cq_cuenta        = @w_ctacte and
+            cq_cheque        = @i_cheque and
+            cq_estado_actual = @w_estado_actual
+
+
+     if @w_est = "G" and round(@w_valor_chq,2) != round(@i_valor,2)
+     begin
+         /*  Valor No Corresponde */
+         exec cobis..sp_cerror
+            @t_debug= @t_debug,
+            @t_file = @t_file,
+            @t_from = @w_sp_name,
+            @i_num  = 201014
+         return 201014
+     end
+
+     if @w_estado_actual = 'R' --Orden de no pago
+     begin
+        select  @w_mensaje = 'Cheque con suspension ' + @w_mensaje
+                     + ' por un valor de ' + convert (varchar, @w_valor_np)
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201009,
+                @i_sev  = 1,
+                @i_msg  = @w_mensaje
+        select @o_cod_error = 201009
+        return 201009
+     end
+     if @w_estado_actual = 'A'
+     begin
+        select @w_mensaje = 'Cheque con suspension ' + @w_mensaje
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201010,
+                @i_sev  = 1,
+                @i_msg  = @w_mensaje
+        select @o_cod_error = 201010
+        return 201010
+     end
+     if @w_estado_actual = 'P'
+     begin
+        /*  Cheque ya ha sido pagado  */
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201011
+        select @o_cod_error = 201011
+        return 201011
+     end
+	/*Se pueden reservar cheques certificados, verifica el valor*/
+     if @w_estado_actual = 'C' and @w_valor_np != @i_valor
+     begin
+        /*  Cheque certificado  */
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201014
+        select @o_cod_error = 201014
+
+        return 201014
+     end
+--      *****  SE ELIMINO. REQ. CUS02000010636  *****
+--      if @w_estado_actual = 'G'
+--      begin
+--         /*  Cheque de Gerencia  */
+--         exec cobis..sp_cerror
+--                 @t_debug= @t_debug,
+--                 @t_file = @t_file,
+--                 @t_from = @w_sp_name,
+--                 @i_num  = 201053
+--         select @o_cod_error = 201053
+--
+--         return 201053
+--      end
+    /* if @w_estado_actual = 'T'
+     begin
+       --  Cheque protestado  
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201081
+        select @o_cod_error = 201081
+
+        return 201081
+     end*/
+
+     if @w_estado_actual = 'E' and @w_estado_anterior = 'A'
+     begin
+        /*  Cheque rechazado con suspension de pago */
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201010
+        select @o_cod_error = 201010
+
+        return 201010
+     end
+     if @w_estado_actual = 'E' and @w_estado_anterior = 'R'
+     begin
+        /*  Cheque rechazado con suspension de pago */
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201009
+        select @o_cod_error = 201009
+
+        return 201009
+     end
+     if @w_estado_actual = 'T' and @w_estado_anterior = 'A'
+     begin
+        /*  Cheque protestado con suspension de pago */
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201010
+        select @o_cod_error = 201010
+
+        return 201010
+     end
+     if @w_estado_actual = 'T' and @w_estado_anterior = 'R'
+     begin
+        /*  Cheque protestado con suspension de pago */
+        exec cobis..sp_cerror
+                @t_debug= @t_debug,
+                @t_file = @t_file,
+                @t_from = @w_sp_name,
+                @i_num  = 201009
+        select @o_cod_error = 201009
+
+        return 201009
+     end
+  end --Fin de Validacion del cheque
+
+-- Generacion del secuencial para las inserciones en las tablas
+   if @s_user <> "interfaz"
+   begin
+
+   /*Si el cheque es certificado*/
+   if @w_estado_actual = 'C'
+     begin
+	 exec @w_return = cobis..sp_cseqnos
+          @t_debug	  = @t_debug,
+          @t_file	  = @t_file,
+          @t_from 	  = @w_sp_name,
+          @i_tabla	  = 'cc_chq_certi_reservado',
+	  @o_siguiente	  = @w_reserva out
+  	 if @w_return != 0
+      	return @w_return
+      exec @w_return = cobis..sp_cseqnos
+          @t_debug	  = @t_debug,
+          @t_file	  = @t_file,
+          @t_from 	  = @w_sp_name,
+          @i_tabla	  = 'cc_his_reserva_chq_certi',
+	  @o_siguiente	  = @w_secuencial out
+   	 if @w_return != 0
+     	 return @w_return
+    end
+   else
+    begin
+
+    if @w_secu_reserv = 0
+    begin
+
+            select @w_reserva = @w_secu_reserv
+
+           	exec @w_return = cobis..sp_cseqnos
+                  @t_debug	  = @t_debug,
+                  @t_file	  = @t_file,
+                  @t_from 	  = @w_sp_name,
+                  @i_tabla	  = 'cc_cuenta_reservada',
+        	  @o_siguiente	  = @w_reserva out
+           	if @w_return != 0
+              	return @w_return
+
+    end --if @w_secu_reserv > 0
+    else
+    begin
+        select @w_reserva = @w_secu_reserv
+    end 
+
+ 	exec @w_return = cobis..sp_cseqnos
+          @t_debug	  = @t_debug,
+          @t_file	  = @t_file,
+          @t_from 	  = @w_sp_name,
+          @i_tabla	  = 'cc_his_reserva',
+	  @o_siguiente	  = @w_secuencial out
+   	 if @w_return != 0
+     	 return @w_return
+    end
+   end
+
+   --Por caida parcial de linea desde frontend
+   if @i_motivo = 1 
+        select @i_tipo = 'L'
+        
+-- Determina numero de dias de vigencia de la reserva
+   select @w_dias_rva = convert(int,substring(y.valor,1,2))
+   from cobis..cl_tabla x,
+        cobis..cl_catalogo y
+   where x.tabla  = 'cc_tipo_reserva'
+     and x.codigo = y.tabla
+     and y.codigo = @i_tipo
+   if @@rowcount = 0
+   begin
+         exec cobis..sp_cerror
+                 @t_debug        = @t_debug,
+                 @t_file         = @t_file,
+                 @t_from         = @w_sp_name,
+                 @i_num          = 205001
+          return 205001
+   end
+
+-- Determina ciudad de la oficina donde se realizo la transaccion
+   select @w_ciudad = of_ciudad
+   from cobis..cl_oficina
+   where of_oficina = @s_ofi
+
+   --Reserva de fondos permanente desde frontend
+   if @i_motivo = 2
+      select @w_fecha_lib = '12/31/2050'
+   else
+      begin
+        -- Calcula fecha de liberacion de la reserva
+           if @s_user <> "interfaz"
+              begin
+                select @w_fecha_lib = dateadd(dd,1,@s_date),
+	               @w_cont      = 0
+                while @w_cont <  @w_dias_rva
+                 if exists (select df_fecha from cobis..cl_dias_feriados
+                            where df_ciudad = @w_ciudad
+                            and df_fecha = @w_fecha_lib)
+                    select @w_fecha_lib = dateadd(dd,1,@w_fecha_lib)
+                  else
+                    begin
+                       select @w_cont = @w_cont + 1
+                       if @w_cont <  @w_dias_rva
+                          select @w_fecha_lib = dateadd(dd,1,@w_fecha_lib)
+                    end
+              end
+           else
+             select @w_fecha_lib = dateadd(dd,@w_dias_rva,@s_date),
+  	            @w_secuencial = @i_sec_his,
+	            @w_reserva = @i_reserva
+       end
+
+   select @o_reserva = @w_reserva
+
+   -- Insercion en la tabla de fondos reservados
+      /*Si el cheque es certificado*/
+      if @w_estado_actual = 'C'
+	     insert into cob_cuentas..cc_chq_certi_reservado
+	        (cr_ctacte, cr_cheque, cr_secuencial,
+	         cr_valor, cr_moneda, cr_fecha,
+	         cr_fecha_lib, cr_num_reserva,
+	         cr_estado, cr_autorizante, cr_tipo, cr_ofi_solic, cr_observacion)
+	      values
+	        (@w_ctacte, @i_cheque, @w_reserva,
+	         @i_valor, @i_mon, @s_date,
+	         @w_fecha_lib, @w_secuencial,
+	         'R', @s_user, @i_tipo, @s_ofi, @i_solicita)
+	else
+	     insert into cob_cuentas..cc_cuenta_reservada
+	        (cr_ctacte, cr_cheque, cr_secuencial,
+	         cr_valor, cr_moneda, cr_fecha,
+	         cr_fecha_lib, cr_num_reserva,
+	         cr_estado, cr_autorizante, cr_tipo, cr_ofi_solic, cr_observacion)
+	     values
+	        (@w_ctacte, @i_cheque, @w_reserva,
+	         @i_valor, @i_mon, @s_date,
+	         @w_fecha_lib, @w_secuencial,
+	         'R', @s_user, @i_tipo, @s_ofi, @i_solicita)
+
+  if @@error != 0
+      begin
+      -- Error en creacion de registro en cc_cuenta_reservada
+	  exec cobis..sp_cerror
+		@t_debug      = @t_debug,
+		@t_file       = @t_file,
+		@t_from       = @w_sp_name,
+		@i_num        = 208050
+	  select @o_cod_error = 208050
+	  return 208050
+      end
+
+   -- Insercion en la tabla historica de reservas
+     /*Si el cheque es certificado*/
+   	 if @w_estado_actual = 'C'
+ 	      insert into cc_his_reserva_chq_certi
+			    (hr_ctacte, hr_secuencial, hr_cheque,
+	                     hr_reserva, hr_valor, hr_moneda,
+			     hr_fecha, hr_fecha_res, hr_fecha_lib,
+	                     hr_num_reserva, hr_estado,
+			     hr_autorizante, hr_tipo, hr_ofi_solic, hr_observacion)
+	     values (@w_ctacte, @w_secuencial, @i_cheque,
+	                     @w_reserva,  @i_valor, @i_mon,
+			     @s_date, @s_date, @w_fecha_lib,
+	                     @i_num_reserva, 'R',
+			     @s_user, @i_tipo, @s_ofi, @i_solicita)
+	 else
+	      insert into cc_his_reserva
+			    (hr_ctacte, hr_secuencial, hr_cheque,
+	                     hr_reserva, hr_valor, hr_moneda,
+			     hr_fecha, hr_fecha_res, hr_fecha_lib,
+	                     hr_num_reserva, hr_estado,
+			     hr_autorizante, hr_tipo, hr_ofi_solic, hr_observacion)
+		     values (@w_ctacte, @w_secuencial, @i_cheque,
+	                     @w_reserva,  @i_valor, @i_mon,
+			     @s_date, @s_date, @w_fecha_lib,
+	                     @i_num_reserva, 'R',
+			     @s_user, @i_tipo, @s_ofi, @i_solicita)
+      if @@error != 0
+      begin
+      -- Error en creacion de registro en cc_his_reserva
+	  exec cobis..sp_cerror
+		@t_debug      = @t_debug,
+		@t_file       = @t_file,
+		@t_from       = @w_sp_name,
+		@i_num        = 208045
+	  select @o_cod_error = 208045
+	  return 208045
+      end
+
+      insert into cob_cuentas..cc_tran_servicio
+		      ( ts_secuencial, ts_tipo_transaccion, ts_tsfecha,
+              ts_usuario, ts_terminal, ts_oficina, ts_reentry, ts_origen,
+              ts_cta_banco, ts_fecha, ts_valor, ts_tipo, ts_causa,
+              ts_autorizante, ts_cod_alterno, ts_moneda, ts_fecha_uso,ts_autoriz_aut, 
+              ts_fecha_ven,ts_oficina_cta,ts_cheque)
+	       values (@s_ssn, @t_trn, @s_date,
+		       @s_user, @s_term, @s_ofi, @t_rty, @s_org,
+		       @i_cta, @s_date, @i_valor, 'R', @i_causa,
+		       @i_aut, @w_reserva, @i_mon, getdate(), @i_solicita,
+                       @w_fecha_lib, @o_oficina, @i_cheque)
+      if @@error != 0
+      begin
+      -- Error en creacion de transaccion de servicio
+	  exec cobis..sp_cerror
+		  @t_debug	 = @t_debug,
+		  @t_file	 = @t_file,
+		  @t_from	 = @w_sp_name,
+		  @i_num	 = 203005
+	  select @o_cod_error = 203005
+	  return 203005
+      end
+   commit tran
+end
+
+
+
+if @t_ejec = 'R'
+begin
+      exec @w_return = cob_cuentas..sp_resultados_branch_cc
+           @i_cuenta       = @w_ctacte,
+           @i_fecha        = @s_date,
+           @i_ofi          = @s_ofi,
+           @i_tipo_cuenta  = 'O'
+      if @w_return != 0
+         return @w_return
+end
+return 0
