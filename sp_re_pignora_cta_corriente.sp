@@ -80,6 +80,9 @@ begin
 		, @w_cod_error          int
 		, @w_oficina            smallint
 		, @w_descripcion        VARCHAR(100)
+        , @w_accion_traza       char(3)
+		, @w_num_reserva        int
+
     ----------------------------------------------------------------------
     -- Inicialización
     ----------------------------------------------------------------------
@@ -93,6 +96,9 @@ begin
 	set @w_cod_error         = 0
 	set @w_oficina           = 0
 	set @w_return            = 0
+	set @w_accion_traza      = ''
+    set @w_num_reserva       = 0
+ 
 
     ----------------------------------------------------------------------
     -- Validar producto bancario asociado a la cuenta
@@ -105,20 +111,43 @@ begin
  
     select @w_fecha_proceso = convert(varchar(10),fp_fecha,101)
       from cobis..ba_fecha_proceso
+   
+ 
+	  
      ----------------------------------------------------------------------
     -- 1 cupon vigente a la vez
     ----------------------------------------------------------------------    
- 
-   if exists(select 1  from cob_cuentas..cc_cuenta_reservada
-              where cr_ctacte = @w_idcta      and cr_estado = 'R')
+    if @i_accion = 'R'-- Reservar
     begin
+	   set @w_accion_traza = 'PIG'   --pignorado
+       set @w_estado       = 'P'     --pendiente
+	   if exists(select 1  from cob_cuentas..cc_cuenta_reservada
+				  where cr_ctacte = @w_idcta      and cr_estado = 'R'
+				  and cr_tipo='P')  
+		begin
+            select @o_cod_error = 160004
+                 , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
+	 
+			return 1
+		end	
+    end
 
-        select @o_cod_error = 208114
-             , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
- 
-        return 1
-    end		  
- 
+	if @i_accion = 'E'-- Eliminar 
+	begin
+	    set @w_accion_traza = 'DPG'   --despignorado
+        set @w_estado       = 'C'     --consumido
+	    set @w_num_reserva  = @i_reserva
+        if exists(select 1  from cob_cuentas..cc_his_reserva
+                  where hr_ctacte = @w_idcta     and hr_num_reserva = @i_reserva   --@i_sec   
+				  and hr_estado = 'E' and hr_tipo='P' and hr_valor = @i_valor_pignorar) 
+        begin
+
+            select @o_cod_error = 160009
+                 , @o_msg_error = 'CUPON YA HA SIDO LIBERADO'
+            return 1
+        end	
+	end
+
  /*
     ----------------------------------------------------------------------
     -- Generación de costos (cob_remesas)
@@ -147,8 +176,9 @@ print '@w_valor_comision  %1!',@w_valor_comision
 
 */
  
+
     ----------------------------------------------------------------------
-    -- PIGNORACION:  Reservar fondos en la cuenta de ahorro
+    -- PIGNORACION:  Reservar fondos en la cuenta corriente
     ----------------------------------------------------------------------
 
     exec @w_return = sp_reserva_fondos
@@ -174,9 +204,8 @@ print '@w_valor_comision  %1!',@w_valor_comision
        , @i_valor      = @i_valor_pignorar
        , @i_mon        = @i_moneda
        , @i_accion     = @i_accion
-       , @i_tipo       = 'P'  --?
-       , @i_ofi_solic  = 76 --?
-       , @i_sec        = 0 --?
+       , @i_tipo       = 'P'  --dias de reserva pignoracion
+       , @i_ofi_solic  = @s_ofi
        , @i_val_reservar = @i_val_reservar
        , @i_solicita    = @i_solicita
        , @i_comision    = @w_valor_comision
@@ -187,18 +216,20 @@ print '@w_valor_comision  %1!',@w_valor_comision
        , @i_plazo	    = null
        , @i_cheque      = 0
        , @i_chq_certi   = 'N' 
-       , @i_reserva     = @i_reserva
+       , @i_reserva     = @i_reserva    --numero de reserva 
        , @i_num_reserva = @i_num_reserva
      
        , @o_oficina     = @w_oficina out
        , @o_cod_error	= @w_cod_error out
-       , @o_reserva     = @o_reserva out
+       , @o_reserva     = @w_num_reserva out
        , @o_saldo_para_girar_antes  = @w_saldoagirar_antes out 
 	   
-	   print '@w_saldoagirar_antes %1!'  ,@w_saldoagirar_antes
-	   
+   
     if @w_return <> 0
     begin
+        if @w_num_reserva is null
+		   set @w_num_reserva = 0
+		   
         set @w_resultado = 'F'
         set @o_cod_error = @w_return
     end
@@ -218,14 +249,15 @@ print '@w_valor_comision  %1!',@w_valor_comision
 	
      exec @w_return =  cob_bvirtual..sp_re_traza_retiroefectivo
       @i_cupon        = @i_cupon
+    , @i_num_reserva  = @w_num_reserva	  
     , @i_cliente      = @i_cliente
-    , @i_accion       = 'PIG'
+    , @i_accion       = @w_accion_traza
     , @i_tipo_cta     = 'CTE'
     , @i_cta_banco    = @i_cuenta
     , @i_moneda       = @i_moneda
     , @i_monto        = @i_valor_pignorar
     , @i_fecha_gen    = @w_ahora
-    , @i_estado       = 'P'   --Pignorado
+    , @i_estado       = @w_estado   --P=Pendiente, C=Consumido, X=Expirado
     , @i_cliente_dest = null
     , @i_fecha        = @w_fecha_proceso
     , @i_usuario      = @s_user

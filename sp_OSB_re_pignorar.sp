@@ -1,5 +1,27 @@
-use cob_bvirtual
-go
+USE cob_bvirtual
+GO
+/******************************************************************************/ 
+/* Archivo:              sp_OSB_re_pingonar.sp                                */ 
+/* Stored procedure:     sp_OSB_re_pingonar                                   */ 
+/* Base de datos:        cob_bvirtual                                         */ 
+/* Producto:             Banca Virtual                                        */ 
+/* Diseñado por:         Joel Lozano                                          */ 
+/* Fecha de escritura:   21/Agosto/2025                                       */ 
+/******************************************************************************/ 
+/*                                  IMPORTANTE                                */ 
+/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */ 
+/* de Grupo Financiero Ficohsa.                                               */ 
+/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */ 
+/* sin la previa autorización.                                                */ 
+/******************************************************************************/ 
+/*                                  PROPÓSITO                                 */ 
+/* Orquestar el proceso de  despignoración de cuentas de ahorro o corriente   */ 
+/* corriente para operaciones de Retiro Efectivo mediante cupón.              */ 
+/******************************************************************************/ 
+/*                               MODIFICACIONES                               */ 
+/* FECHA        AUTOR                     TAREA             RAZÓN             */ 
+/* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */ 
+/******************************************************************************/ 
 
 -- ===============================================================
 -- Procedimiento: sp_OSB_re_pignorar
@@ -57,7 +79,7 @@ BEGIN
         , @w_num_transaccion  smallint
         , @w_moneda       smallint
         , @w_codigo_cliente  int
-        
+		, @w_idcuenta         int        
 
     --------------------------------------------------------------------------
     -- Inicialización de variables de salida
@@ -67,7 +89,6 @@ BEGIN
     SET @w_sp_name           = 'sp_OSB_re_pignorar'
     SET @w_tipo_cuenta       = ''
 
-    print '@i_CURRENCY %1!',@i_CURRENCY
     --------------------------------------------------------------------------
     -- Paso 1: Validaciones previas de la pignoración
     --------------------------------------------------------------------------
@@ -79,7 +100,8 @@ BEGIN
         , @o_tipo_cuenta  = @w_tipo_cuenta    OUTPUT
         , @o_moneda       = @w_moneda         OUTPUT
         , @o_msg_error    = @w_msg_error      OUTPUT
-
+		, @o_idcuenta     = @w_idcuenta       OUTPUT
+		
     IF @w_return != 0
     BEGIN
         SET @o_num_error  = @w_return
@@ -87,7 +109,7 @@ BEGIN
         RETURN 1
     END
 
-print '@w_moneda %1! @i_CURRENCY %2! @w_codigo_cliente %3!',@w_moneda, @i_CURRENCY ,@w_codigo_cliente
+
     --------------------------------------------------------------------------
     -- Paso 2: Obtener datos de sesión/seguridad COBIS
     --------------------------------------------------------------------------

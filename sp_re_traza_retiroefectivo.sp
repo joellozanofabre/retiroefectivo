@@ -18,6 +18,7 @@ go
 create proc sp_re_traza_retiroefectivo
 (
       @i_cupon        varchar(30)
+    , @i_num_reserva  int
     , @i_cliente      int
     , @i_accion       varchar(5)
     , @i_tipo_cta     char(3)
@@ -37,11 +38,12 @@ create proc sp_re_traza_retiroefectivo
 )
 as
 begin
-    declare @w_error int,
-	        @w_nombre_sp varchar(50)
+    declare @w_error     int,
+
+            @w_nombre_sp varchar(50)
 
     set @w_error = 0
-	set @w_nombre_sp = 'sp_re_traza_retiroefectivo'
+    set @w_nombre_sp = 'sp_re_traza_retiroefectivo'
 
     ----------------------------------------------------------------------
     -- Insertar traza en re_retiro_efectivo
@@ -51,15 +53,15 @@ begin
           re_cupon         , re_cliente       , re_accion      , re_cta_banco    , re_moneda
         , re_monto         , re_fecha_gen     , re_estado      , re_cliente_dest , re_fecha
         , re_usuario       , re_terminal      , re_oficina     , re_resultado    , re_detalle
-        , re_tipo_cta         
+        , re_tipo_cta      , re_num_reserva
     )
     values
     (
           @i_cupon         , @i_cliente       , @i_accion      , @i_cta_banco    , @i_moneda
         , @i_monto         , @i_fecha_gen     , @i_estado      , @i_cliente_dest , @i_fecha
         , @i_usuario       , @i_terminal      , @i_oficina     , @i_resultado    , @i_detalle
-        , @i_tipo_cta
-	)
+        , @i_tipo_cta      , @i_num_reserva
+    )
 
     if @@rowcount = 0
     begin
@@ -75,15 +77,15 @@ begin
           hr_cupon         , hr_cliente       , hr_accion      , hr_cta_banco    , hr_moneda
         , hr_monto         , hr_fecha_gen     , hr_estado      , hr_cliente_dest , hr_fecha
         , hr_usuario       , hr_terminal      , hr_oficina     , hr_resultado    , hr_detalle
-        , hr_tipo_cta         
+        , hr_tipo_cta      , hr_num_reserva      
     )
     values
     (
           @i_cupon         , @i_cliente       , @i_accion      , @i_cta_banco    , @i_moneda
         , @i_monto         , @i_fecha_gen     , @i_estado      , @i_cliente_dest , @i_fecha
         , @i_usuario       , @i_terminal      , @i_oficina     , @i_resultado    , @i_detalle
-        , @i_tipo_cta
-	)
+        , @i_tipo_cta      , @i_num_reserva
+    )
 
     if @@rowcount = 0
     begin
@@ -109,4 +111,3 @@ if object_id('dbo.sp_re_traza_retiroefectivo') is not null
 else
     print '<<< FAILED CREATING PROCEDURE dbo.sp_re_traza_retiroefectivo >>>'
 go
-

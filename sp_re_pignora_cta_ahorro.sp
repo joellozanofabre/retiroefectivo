@@ -52,7 +52,7 @@ create procedure sp_re_pignora_cta_ahorro
     , @i_tarjeta        cuenta       = '000000000000000'
 
     -- Salidas
-    , @o_reserva        int          = 0 out
+    --, @o_reserva        int          = 0 out
     , @o_cod_error      int          output
     , @o_msg_error      varchar(255) output
 )
@@ -74,8 +74,11 @@ begin
         , @w_fecha_proceso      datetime
         , @w_msg_error          varchar(100)
         , @w_nombre_sp          varchar(50)
-		, @w_descripcion        VARCHAR(100)
-
+        , @w_descripcion        VARCHAR(100)
+        , @w_accion_traza       char(3)
+		, @w_num_reserva        int
+		
+        
     ----------------------------------------------------------------------
     -- Inicialización
     ----------------------------------------------------------------------
@@ -85,8 +88,11 @@ begin
     set @w_ahora             = getdate()
     set @w_nombre_sp         = 'sp_re_pignora_cta_ahorro'
     set @w_ah_cuenta         = 0
-	set @w_descripcion       = 'PIGNORACION DE CUENTA DE AHORRO DESDE ATM'
-	set @w_return            = 0
+    set @w_descripcion       = 'PIGNORACION DE CUENTA DE AHORRO DESDE ATM'
+    set @w_return            = 0
+    set @w_accion_traza      = ''
+	set @w_num_reserva       = 0
+
 
     ----------------------------------------------------------------------
     -- Validar producto bancario asociado a la cuenta
@@ -101,21 +107,38 @@ begin
       from cobis..ba_fecha_proceso
  
  
-     ----------------------------------------------------------------------
+    ----------------------------------------------------------------------
     -- 1 cupon vigente a la vez
     ----------------------------------------------------------------------    
- 
-   if exists(select 1  from cob_ahorros..ah_cuenta_reservada
-              where cr_cuenta = @w_ah_cuenta      and cr_estado = 'R')
+    if @i_accion = 'R'-- Reservar
     begin
+	    set @w_accion_traza = 'PIG'   --pignorado
+        set @w_estado       = 'P'     --pendiente
+        if exists(select 1  from cob_ahorros..ah_cuenta_reservada
+                  where cr_cuenta = @w_ah_cuenta      and cr_estado = 'R' and cr_tipo='P')    
+        begin
 
-        select @o_cod_error = 208114
-             , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
- 
-        return 1
-    end	
+            select @o_cod_error = 160004
+                 , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
+     
+            return 1
+        end
+    end
 
- 
+	if @i_accion = 'E'-- Eliminar 
+	begin
+        set @w_accion_traza = 'DPG'   --despignorado
+        set @w_estado       = 'C'     --consumido
+	    set @w_num_reserva  = @i_sec	
+        if exists(select 1  from cob_ahorros..ah_his_reserva
+                  where hr_cuenta = @w_ah_cuenta   and hr_num_reserva = @i_sec   and hr_estado = 'E' and hr_tipo='P') 
+        begin
+
+            select @o_cod_error = 160009
+                 , @o_msg_error = 'CUPON YA HA SIDO LIBERADO'
+            return 1
+        end	
+	end
 
     ----------------------------------------------------------------------
     -- Generación de costos (cob_remesas)
@@ -171,20 +194,20 @@ begin
        , @i_accion     = @i_accion
        , @i_tipo       = 'P'  --nuevo pignoracion
        , @i_ofi_solic  = @s_ofi 
-       , @i_sec        = 0 --?
+       , @i_sec        = @i_sec
        , @i_val_reservar = @i_val_reservar
        , @i_solicita   = @w_descripcion
        , @i_comision   = @w_valor_comision
        , @i_tarjeta    = @i_tarjeta
        , @i_motivo     = @i_motivo
-       , @o_reserva    = @o_reserva out
+       , @o_reserva    = @w_num_reserva out
 
     if @w_return <> 0
     begin
         set @w_resultado = 'F'
         set @o_cod_error = @w_return
     end
-
+    
     ----------------------------------------------------------------------
     -- Registrar la traza en re_retiro_efectivo
     ----------------------------------------------------------------------
@@ -196,17 +219,18 @@ begin
          
         set @w_detalle_resultado = @o_msg_error
 
-    end	
+    end 
     exec @w_return =  cob_bvirtual..sp_re_traza_retiroefectivo
       @i_cupon        = @i_cupon
+    , @i_num_reserva  = @w_num_reserva  
     , @i_cliente      = @i_cliente
-    , @i_accion       = 'PIG'
+    , @i_accion       = @w_accion_traza
     , @i_tipo_cta     = 'AHO'
     , @i_cta_banco    = @i_cuenta
     , @i_moneda       = @i_moneda
     , @i_monto        = @i_valor_pignorar
     , @i_fecha_gen    = @w_ahora
-    , @i_estado       = 'P'   --Pignorado
+    , @i_estado       = @w_estado   --P=Pendiente, C=Consumido, X=Expirado
     , @i_cliente_dest = null
     , @i_fecha        = @w_fecha_proceso
     , @i_usuario      = @s_user

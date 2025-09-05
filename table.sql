@@ -24,8 +24,10 @@ create table re_retiro_efectivo (
     re_terminal         varchar(30)     null,       -- Terminal / canal de origen
     re_oficina          smallint        null,       -- Oficina donde se genera
     re_resultado        char(1)         not null,   -- Resultado: E=éxito, F=falla
+    re_num_reserva      int             not null,    -- Secuencial generado desde cobis
     re_detalle          varchar(255)    null        -- Mensaje adicional
 )
+
 
 go
 
@@ -48,7 +50,7 @@ create table re_his_retiro_efectivo (
     hr_cliente          int             not null,   -- Cliente que emite el retiro (solo naturales)
     hr_accion           char(3)         not null,   -- Acción: PIGNORA, DESPIGNORA, RETIRO
     hr_tipo_cta         char(3)         not null,   -- AHO - CTE
-    hr_cta_banco        varchar(30)     not null,   -- Número de cuenta (ahorro/corriente)
+    hr_cta_banco        varchar(20)     not null,   -- Número de cuenta (ahorro/corriente)
     hr_moneda           smallint        not null,   -- Moneda de la transacción
     hr_monto            money           not null,   -- Monto retenido (pignorado)
     hr_fecha_gen        datetime        not null,   -- Fecha/hora de generación
@@ -59,7 +61,9 @@ create table re_his_retiro_efectivo (
     hr_terminal         varchar(30)     null,       -- Terminal / canal de origen
     hr_oficina          smallint        null,       -- Oficina donde se genera
     hr_resultado        char(1)         not null,   -- Resultado: E=éxito, F=falla
-    hr_detalle          varchar(255)    null        -- Mensaje adicional
+    hr_num_reserva      int             not null,    -- Secuancial generado desde cobis
+    hr_detalle          varchar(255)    null       -- Mensaje adicional
+    
 )
 
 go
@@ -69,12 +73,3 @@ create index ixe_hr_cta on re_his_retiro_efectivo(hr_cupon, hr_cliente, hr_fecha
 
 go
 
-
-/*
-re_id       re_cupon                       re_cliente  re_accion re_cta_banco         re_moneda re_monto                   re_fecha_gen                re_estado re_cliente_dest re_fecha                    re_usuario     re_terminal                    re_oficina re_resultado re_detalle                                                                                                                                                                                                                                                      
------------ ------------------------------ ----------- --------- -------------------- --------- -------------------------- --------------------------- --------- --------------- --------------------------- -------------- ------------------------------ ---------- ------------ --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
-1           12312123dhakshdqsuqhwiqwuCPN12 80817940    PIG       198466000011329      0         1,000.00                   Aug 25 2025 10:22AM         P         (null)          Jan 23 2025 12:00AM         JLOZANO        NIBNADMDTE                     220        F            Generación de cupón de retiro sin tarjeta. OK                                                                                                                                                                                                                   
-12          12312123dhakshdqsuqhwiqwuCPN12 80817940    DPG       198466000011329      0         1,000.00                   Aug 25 2025 10:22AM         D         333333          Jan 23 2025 12:00AM         JLOZANO        NIBNSADMDE                     220        E            xxxxxxxxxxxxxxxxxxxxxxxGeneración de cupón de retiro sin tarjeta. OK                                                                                                                                                                                                                   
-(1 row(s) affected)
-
-*/

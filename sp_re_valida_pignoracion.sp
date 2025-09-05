@@ -16,6 +16,7 @@ create procedure sp_re_valida_pignoracion
     , @o_cliente        int          output
     , @o_tipo_cuenta    cuenta       output 
 	, @o_moneda         smallint     OUTPUT
+	, @o_idcuenta       int     =0   OUTPUT 
     , @o_msg_error      varchar(255) output
 )
 as
@@ -49,11 +50,11 @@ begin
     ----------------------------------------------------------------------
     -- Determinar el tipo de producto (Ahorros o Corriente)
     ----------------------------------------------------------------------
- 
 
 -- Llamada al procedimiento
    exec @w_return = sp_re_get_tipodecuenta 
      @i_cuenta_banco = @i_cuenta_banco
+   , @i_moneda       = @o_moneda 
    , @o_tipo_cuenta  = @o_tipo_cuenta output
    , @o_id_cuenta    = @w_id_cuenta   output
    , @o_cod_error    = @w_cod_error   output
@@ -67,7 +68,7 @@ begin
         return @w_cod_error
     end
 
-    print 'o_tipo_cuenta %1!',@o_tipo_cuenta
+    select @o_idcuenta = @w_id_cuenta
     ----------------------------------------------------------------------
     -- Validar el tipo de cliente
     ----------------------------------------------------------------------

@@ -1,8 +1,8 @@
 USE cob_bvirtual
 GO
 /******************************************************************************/ 
-/* Archivo:              sp_OSB_re_despingonar_orquestador.sp                    */ 
-/* Stored procedure:     sp_OSB_re_despingonar_orquestador                       */ 
+/* Archivo:              sp_OSB_re_despignorar.sp                             */ 
+/* Stored procedure:     sp_OSB_re_despignorar                                */ 
 /* Base de datos:        cob_bvirtual                                         */ 
 /* Producto:             Banca Virtual                                        */ 
 /* Diseñado por:         Joel Lozano                                          */ 
@@ -22,21 +22,20 @@ GO
 /* FECHA        AUTOR                     TAREA             RAZÓN             */ 
 /* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */ 
 /******************************************************************************/ 
-IF OBJECT_ID('dbo.sp_OSB_re_despingonar_orquestador') IS NOT NULL
+IF OBJECT_ID('dbo.sp_OSB_re_despignorar') IS NOT NULL
 BEGIN
-    DROP PROCEDURE dbo.sp_OSB_re_despingonar_orquestador
+    DROP PROCEDURE dbo.sp_OSB_re_despignorar
 END
 GO
 
-CREATE PROCEDURE dbo.sp_OSB_re_despingonar_orquestador
+CREATE PROCEDURE dbo.sp_OSB_re_despignorar
 (
-      @i_cuentabanco_pignorar  cuenta      -- Cuenta origen a pignorar
-    , @i_codigo_cliente        int         -- Cliente dueño de la cuenta
-    , @i_monto                 money       -- Monto a retirar
-    , @i_moneda                smallint    -- Moneda
-    , @i_cupon                 varchar(40) -- Cupón generado
-    , @o_codigo_respuesta      int output  -- Código de salida
-    , @o_detalle_respuesta     varchar(255) output -- Mensaje detalle
+      @i_DEBIT_ACCOUNT         varchar(35)   = null      -- Cuenta origen a pignorar
+    , @i_AMOUNT                money       -- Monto a retirar
+    , @i_CURRENCY              char(3)     -- Moneda
+    , @i_CUPON                 varchar(40) -- Cupón generado
+    , @o_num_error             int          = null out
+    , @o_desc_error            varchar(132) = null out	
 )
 AS
 BEGIN
@@ -49,9 +48,7 @@ BEGIN
         , @w_msg_error   varchar(255)
         , @w_sp_name     varchar(50)
         , @w_return      int
-
-    DECLARE 
-          @i_gen_ssn     char(1)
+        , @i_gen_ssn     char(1)
         , @w_ssn         int
         , @w_user        login
         , @w_sesn        int
@@ -68,31 +65,36 @@ BEGIN
         , @w_tipo_cuenta char(3)
         , @w_reserva     int
 		, @w_num_transaccion  smallint
-
+        , @w_moneda           smallint
+        , @w_codigo_cliente   int
+		, @w_num_reserva      int
+		, @w_idcuenta         int
     --------------------------------------------------------------------------
     -- Inicialización de variables de salida
     --------------------------------------------------------------------------
-    SET @o_codigo_respuesta  = 0
-    SET @o_detalle_respuesta = 'SUCCESS'
-    SET @w_sp_name           = 'sp_OSB_re_despingonar_orquestador'
+    SET @o_num_error         = 0
+    SET @o_desc_error        = 'SUCCESS'
+    SET @w_sp_name           = 'sp_OSB_re_despignorar'
     SET @w_tipo_cuenta       = ''
-
+    set @w_num_reserva       = 0
     --------------------------------------------------------------------------
     -- Paso 1: Validaciones previas de la pignoración
     --------------------------------------------------------------------------
-    EXEC @w_return = sp_re_valida_pignoracion
-          @i_cuenta_banco = @i_cuentabanco_pignorar
-        , @i_monto        = @i_monto
-        , @i_moneda       = @i_moneda
-        , @i_cliente      = @i_codigo_cliente
-        , @o_tipo_cuenta  = @w_tipo_cuenta OUTPUT
-        --, @o_cod_error    = @w_cod_error OUTPUT
-        , @o_msg_error    = @w_msg_error OUTPUT
+
+ EXEC @w_return = sp_re_valida_pignoracion
+          @i_cuenta_banco = @i_DEBIT_ACCOUNT
+        , @i_monto        = @i_AMOUNT
+        , @i_moneda       = @i_CURRENCY
+        , @o_cliente      = @w_codigo_cliente OUTPUT
+        , @o_tipo_cuenta  = @w_tipo_cuenta    OUTPUT
+        , @o_moneda       = @w_moneda         OUTPUT
+        , @o_msg_error    = @w_msg_error      OUTPUT
+		, @o_idcuenta     = @w_idcuenta       OUTPUT
 
     IF @w_return != 0
     BEGIN
-        SET @o_codigo_respuesta  = @w_return
-        SET @o_detalle_respuesta = 'Error en sp_re_valida_pignoracion: ' + @w_msg_error
+        SET @o_num_error  = @w_return
+        SET @o_desc_error = 'Error en sp_re_valida_pignoracion: ' + @w_msg_error
         RETURN 1
     END
 
@@ -122,8 +124,39 @@ BEGIN
     --------------------------------------------------------------------------
     IF @w_tipo_cuenta = 'AHO'
     BEGIN
-    print 'Paso 3 AHO:'
-        set @w_num_transaccion = 226
+		select @w_num_reserva =   max(hr_num_reserva)
+		FROM cob_ahorros..ah_his_reserva
+		WHERE hr_cuenta = @w_idcuenta
+		AND hr_estado = 'R'
+		if @@rowcount = 0
+		BEGIN
+			SET @o_num_error  = 208113
+			SET @o_desc_error = 'NO SE ENCONTRO EL NUMERO DE RESERVA'
+			RETURN 1 
+		End
+	END
+	else  IF @w_tipo_cuenta = 'CTE'
+	BEGIN
+		select @w_num_reserva =   max(hr_reserva)
+		FROM cob_cuentas..cc_his_reserva
+		WHERE hr_ctacte = @w_idcuenta
+		AND hr_estado = 'R'
+		if @@rowcount = 0
+		BEGIN
+			SET @o_num_error  = 208113
+			SET @o_desc_error = 'NO SE ENCONTRO EL NUMERO DE RESERVA'
+			RETURN 1 
+		End	
+	End
+
+--    AND hr_tipo = @i_tipo
+
+    --------------------------------------------------------------------------
+    -- Paso 3: Delegar según tipo de cuenta
+    --------------------------------------------------------------------------
+    IF @w_tipo_cuenta = 'AHO'
+    BEGIN
+        set @w_num_transaccion = 303
         EXEC @w_return = cob_ahorros..sp_re_pignora_cta_ahorro
               @s_ssn          = @w_ssn
             , @s_srv          = @w_srv
@@ -139,30 +172,32 @@ BEGIN
             , @t_corr         = @w_corr
             , @t_rty          = @w_rty
             , @t_trn          = @w_num_transaccion
-            , @i_cuenta       = @i_cuentabanco_pignorar
-            , @i_valor_pignorar = @i_monto
-            , @i_moneda       = @i_moneda
-            , @i_accion       = 'R'  -- reservar
-            , @i_cupon        = @i_cupon
-            , @i_cliente      = @i_codigo_cliente
+            , @i_cuenta       = @i_DEBIT_ACCOUNT
+            , @i_valor_pignorar = @i_AMOUNT
+            , @i_moneda       = @w_moneda
+            , @i_accion       = 'E'  -- Eliminar
+            , @i_cupon        = @i_CUPON
+            , @i_cliente      = @w_codigo_cliente
             , @i_val_reservar = 0
-            , @i_motivo       = 0
-            , @i_sec          = 0
+            , @i_motivo       = 2
+            , @i_sec          = @w_num_reserva
             , @i_tarjeta      = '000000000000000'
-            , @o_reserva      = @w_reserva OUT
-            , @o_cod_error    = @w_return OUTPUT
+            , @o_reserva      = @w_reserva   OUT
+            , @o_cod_error    = @w_return    OUTPUT
             , @o_msg_error    = @w_msg_error OUTPUT
 
         IF @w_return != 0
         BEGIN
-            SET @o_codigo_respuesta  = @w_return
-            SET @o_detalle_respuesta = 'Error en sp_re_pignora_cta_ahorro: ' + @w_msg_error
+            SET @o_num_error  = @w_return
+            SET @o_desc_error = 'Error en sp_re_pignora_cta_ahorro: ' + @w_msg_error
             RETURN 1
         END
+		
     END
     ELSE IF @w_tipo_cuenta = 'CTE'
     BEGIN
-        set @w_num_transaccion = 2657
+
+        set @w_num_transaccion = 2658
         EXEC @w_return = cob_cuentas..sp_re_pignora_cta_corriente
               @s_ssn          = @w_ssn
             , @s_srv          = @w_srv
@@ -178,15 +213,16 @@ BEGIN
             , @t_corr         = @w_corr
             , @t_rty          = @w_rty
             , @t_trn          = @w_num_transaccion
-            , @i_cuenta       = @i_cuentabanco_pignorar
-            , @i_valor_pignorar = @i_monto
-            , @i_moneda       = @i_moneda
-            , @i_accion       = 'R'  -- reservar
-            , @i_cupon        = @i_cupon
-            , @i_cliente      = @i_codigo_cliente
+            , @i_cuenta       = @i_DEBIT_ACCOUNT
+            , @i_valor_pignorar = @i_AMOUNT
+            , @i_moneda       = @w_moneda
+            , @i_accion       = 'E'  -- Eliminar
+            , @i_cupon        = @i_CUPON
+            , @i_cliente      = @w_codigo_cliente
             , @i_val_reservar = 0
-            , @i_motivo       = 0
-            , @i_sec          = 0
+            , @i_motivo       = 2
+			, @i_reserva      = @w_num_reserva
+            , @i_sec          = @w_num_reserva
             , @i_tarjeta      = '000000000000000'
             , @o_reserva      = @w_reserva OUT
             , @o_cod_error    = @w_return OUTPUT
@@ -194,16 +230,17 @@ BEGIN
 
         IF @w_return != 0
         BEGIN
-            SET @o_codigo_respuesta  = @w_return
-            SET @o_detalle_respuesta = 'Error en sp_re_pignora_cta_ahorro: ' + @w_msg_error
+            SET @o_num_error  = @w_return
+            SET @o_desc_error = 'Error en sp_re_pignora_cta_ahorro: ' + @w_msg_error
             RETURN 1
         END
+		
     END
     ELSE
     BEGIN
-        SET @o_codigo_respuesta  = 999
-        SET @o_detalle_respuesta = 'Tipo de cuenta inválido'
-        RETURN @o_codigo_respuesta
+        SET @o_num_error  = 999
+        SET @o_desc_error = 'Tipo de cuenta inválido'
+        RETURN @o_num_error
     END
 
     RETURN 0
@@ -214,16 +251,16 @@ GO
 -- PERMISOS DE EJECUCIÓN
 -------------------------------------------------------------------------------
 IF (ROLE_ID('Service_Rol_Dev') > 0)
-    GRANT EXECUTE ON dbo.sp_OSB_re_despingonar_orquestador TO Service_Rol_Dev
+    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol_Dev
 
 IF (ROLE_ID('Service_Rol_QA') > 0)
-    GRANT EXECUTE ON dbo.sp_OSB_re_despingonar_orquestador TO Service_Rol_QA
+    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol_QA
 
 IF (ROLE_ID('Service_Rol') > 0)
-    GRANT EXECUTE ON dbo.sp_OSB_re_despingonar_orquestador TO Service_Rol
+    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol
 GO
 
-EXEC sp_procxmode 'dbo.sp_OSB_re_despingonar_orquestador', 'anymode'
+EXEC sp_procxmode 'dbo.sp_OSB_re_despignorar', 'anymode'
 GO
 
 
@@ -231,10 +268,10 @@ GO
 
 
 
-IF OBJECT_ID('dbo.sp_OSB_re_despingonar_orquestador') IS NOT NULL
-    PRINT '<<< CREATED PROCEDURE dbo.sp_OSB_re_despingonar_orquestador >>>'
+IF OBJECT_ID('dbo.sp_OSB_re_despignorar') IS NOT NULL
+    PRINT '<<< CREATED PROCEDURE dbo.sp_OSB_re_despignorar >>>'
 ELSE
-    PRINT '<<< FAILED CREATING PROCEDURE dbo.sp_OSB_re_despingonar_orquestador >>>'
+    PRINT '<<< FAILED CREATING PROCEDURE dbo.sp_OSB_re_despignorar >>>'
 GO
 
 

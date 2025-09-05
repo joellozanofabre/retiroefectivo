@@ -45,6 +45,34 @@ end
 go
 
 
+-- Insert idempotente de un nuevo error
+if not exists (select 1 from cl_errores where numero = 208113)
+begin
+    insert into cl_errores (numero, severidad, mensaje)
+    values (208113, 0, 'NO SE ENCONTRO EL NUMERO DE RESERVA.')
+    
+    print ' 208113 insertado correctamente'
+end
+else
+begin
+    print 'Error 208113 ya existe, no se realiza ninguna acción'
+end
+go
+-- Insert idempotente de un nuevo error
+if not exists (select 1 from cl_errores where numero = 208113)
+begin
+    insert into cl_errores (numero, severidad, mensaje)
+    values (208114, 0, 'CUPON YA HA SIDO DESPIGNORADO.')
+    
+    print ' 208113 insertado correctamente'
+end
+else
+begin
+    print 'Error 208113 ya existe, no se realiza ninguna acción'
+end
+go
+
+
 
 
 DECLARE  @w_tabla SMALLINT,@siguiente SMALLINT, @w_descrip varchar(100)
