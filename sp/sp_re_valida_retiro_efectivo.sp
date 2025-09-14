@@ -1,3 +1,13 @@
+
+
+
+
+este archivo no dee ir ya lo hace el sp de pignoracion
+
+
+
+
+
 use cob_bvirtual
 go
 
@@ -47,28 +57,74 @@ begin
     end
 
 
+  -- Verificamos que los productos se encuentren habilitados.
+  exec @w_return = cob_bvirtual..sp_ESB_verifica_productos @t_trn =
+  if @w_return <> 0
+  begin
+   select @o_num_error  = @w_return,
+          @o_desc_error = 'Producto Bancario Deshabilitado.'
+
+   return @o_num_error
+  end
+
+--Validacion Monto Negativo
+  exec @w_return   = cob_remesas..sp_valida_valor_negativo
+       @i_val_otro = @i_monto
+  if @w_return != 0
+     return @w_return
+
+
+
+
+    if @i_cuenta_banco is null
+    begin
+        select @o_num_error = 708150,
+                @o_desc_error = 'Campo requerido esta con valor nulo'
+    return 1
+    end
+
+
     ----------------------------------------------------------------------
     -- Determinar el tipo de producto (Ahorros o Corriente)
     ----------------------------------------------------------------------
+    EXEC @w_return = cob_bvirtual.dbo.sp_ESB_cons_tipo_cta
+         @i_canal      = 0,
+         @i_cta        = @i_cuenta_banco,
+         @o_mon        = @o_moneda       OUT,
+         @o_cuenta     = @w_id_cuenta    OUT,
+         @o_tipo_cta   = @o_tipo_cuenta  OUT,
+         @o_cliente    = @w_cod_cliente  OUT,
+         @o_num_error  = @w_cod_error    OUT,
+         @o_desc_error = @o_msg_error    OUT
 
--- Llamada al procedimiento
-   exec @w_return = sp_re_get_tipodecuenta 
-     @i_cuenta_banco = @i_cuenta_banco
-   , @i_moneda       = @o_moneda 
-   , @o_tipo_cuenta  = @o_tipo_cuenta output
-   , @o_id_cuenta    = @w_id_cuenta   output
-   , @o_cod_error    = @w_cod_error   output
-   , @o_id_cliente   = @w_cod_cliente output
-   , @o_msg_error    = @o_msg_error   output
-
-    if @w_return <> 0
-    begin
+    IF @w_return <> 0
+    BEGIN
         select @w_cod_error = @w_return, 
                @o_msg_error = @o_msg_error
         return @w_cod_error
-    end
+    END
+
 
     select @o_idcuenta = @w_id_cuenta
+
+
+
+
+  -- Verifica el codigo de la moneda de la OPERACION
+  if @i_OPERATION_CURRENCY not in (@w_moneda_deb_iso, @w_moneda_cre_iso)
+  begin
+    set @o_desc_error = @w_sp_name+ ' - ' + 'ERROR MONEDA DE LA OPERACION NO VALIDA: '+@i_OPERATION_CURRENCY
+    set @o_num_error  = 30028
+    exec cobis..sp_cerror
+          @i_sev  = 0,
+          @i_msg  = @o_desc_error,
+          @i_num  = @o_num_error
+     return @o_num_error
+  end
+
+
+
+
     ----------------------------------------------------------------------
     -- Validar el tipo de cliente
     ----------------------------------------------------------------------
@@ -93,25 +149,6 @@ begin
         select @w_cod_error = 160007, 
                @o_msg_error = 'CLIENTE NO ES PERSONA NATURAL'
         return @w_cod_error
-    end
-
-
-    ----------------------------------------------------------------------
-    -- Determinar el tipo de producto (Ahorros o Corriente)
-    ----------------------------------------------------------------------
-  select @w_multiplo_base = pa_money
-    from cobis..cl_parametro
-    where pa_nemonico = 'MULRET'
-    and pa_producto = 'CTE'
-	if @@rowcount = 0
-	  set @w_multiplo_base = 100
-  
-    if (@i_monto % @w_multiplo_base != 0)
-    begin
-        select @w_cod_error = 160008, 
-               @o_msg_error = "EL VALOR SOLICITADO NO ES VÁLIDO. SOLO SE PERMITEN MÚLTIPLOS DE "+ cast(@w_multiplo_base as varchar)
-        return @w_cod_error
-		
     end
 
 

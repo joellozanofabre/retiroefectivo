@@ -117,64 +117,21 @@ begin
      ----------------------------------------------------------------------
     -- 1 cupon vigente a la vez
     ----------------------------------------------------------------------    
-    if @i_accion = 'R'-- Reservar
+
+    set @w_accion_traza = 'PIG'   --pignorado
+    set @w_estado       = 'G'     --Generado
+    if exists(select 1  from cob_cuentas..cc_cuenta_reservada
+                where cr_ctacte = @w_idcta      and cr_estado = 'R'
+                and cr_tipo='P')  
     begin
-	   set @w_accion_traza = 'PIG'   --pignorado
-       set @w_estado       = 'P'     --pendiente
-	   if exists(select 1  from cob_cuentas..cc_cuenta_reservada
-				  where cr_ctacte = @w_idcta      and cr_estado = 'R'
-				  and cr_tipo='P')  
-		begin
-            select @o_cod_error = 160004
-                 , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
-	 
-			return 1
-		end	
-    end
+        select @o_cod_error = 160004
+                , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
+    
+        return 1
+    end	
 
-	if @i_accion = 'E'-- Eliminar 
-	begin
-	    set @w_accion_traza = 'DPG'   --despignorado
-        set @w_estado       = 'C'     --consumido
-	    set @w_num_reserva  = @i_reserva
-        if exists(select 1  from cob_cuentas..cc_his_reserva
-                  where hr_ctacte = @w_idcta     and hr_num_reserva = @i_reserva   --@i_sec   
-				  and hr_estado = 'E' and hr_tipo='P' and hr_valor = @i_valor_pignorar) 
-        begin
 
-            select @o_cod_error = 160009
-                 , @o_msg_error = 'CUPON YA HA SIDO LIBERADO'
-            return 1
-        end	
-	end
 
- /*
-    ----------------------------------------------------------------------
-    -- Generación de costos (cob_remesas)
-    ----------------------------------------------------------------------
-   exec @w_return = cob_remesas..sp_genera_costos
-         @t_from        = 'sp_re_pignora_cta_ahorro'
-       , @i_fecha       = @s_date
-       , @i_valor       = 1
-       , @i_categoria   = 'N'
-       , @i_rol_ente    = 'P'
-       , @i_tipo_def    = 'D'
-       , @i_codigo      = 0
-       , @i_tipo_ente   = 'P'
-       , @i_prod_banc   = @w_pro_bancario
-       , @i_producto    = 16
-       , @i_moneda      = @i_moneda
-       , @i_tipo        = 'R'
-       , @i_servicio    = 'CING'
-       , @i_rubro       = 3  --comision
-       , @i_personaliza = 'N'
-       , @i_filial      = 1
-       , @i_oficina     = @s_ofi
-       , @o_valor_total = @w_valor_comision out
-
-print '@w_valor_comision  %1!',@w_valor_comision 
-
-*/
  
 
     ----------------------------------------------------------------------

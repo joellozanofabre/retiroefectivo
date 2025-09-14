@@ -1,20 +1,20 @@
-use cob_ahorros
+use cob_cuentas
 go
 
 -- ===============================================================
--- Procedimiento: sp_re_pignora_cta_ahorro
+-- Procedimiento: sp_re_libera_fondos_cte
 -- Base:         cob_ahorros
 -- Propósito:    Pignorar fondos de una cuenta de ahorro para retiro con cupón.
 -- ===============================================================
 
 if exists (select 1
              from sysobjects
-            where name = 'sp_re_pignora_cta_ahorro'
+            where name = 'sp_re_libera_fondos_cte'
               and type = 'P')
-   drop procedure sp_re_pignora_cta_ahorro
+   drop procedure sp_re_libera_fondos_cte
 go
 
-create procedure sp_re_pignora_cta_ahorro
+create procedure sp_re_libera_fondos_cte
 (
     -- Parámetros de contexto COBIS
       @s_ssn            int
@@ -46,6 +46,7 @@ create procedure sp_re_pignora_cta_ahorro
     , @i_moneda         tinyint
     , @i_accion         char(1)
     , @i_sec            int
+    , @i_reserva        int
     , @i_val_reservar   money        = 0
     , @i_solicita       descripcion  = null
     , @i_motivo         tinyint      = 0
@@ -65,7 +66,7 @@ begin
           @w_saldo              money
         , @w_estado             char(1)
         , @w_return             int
-        , @w_ah_cuenta              int
+        , @w_idcta              int
         , @w_resultado          char(1)
         , @w_pro_bancario       smallint
         , @w_valor_comision     money
@@ -74,9 +75,13 @@ begin
         , @w_fecha_proceso      datetime
         , @w_msg_error          varchar(100)
         , @w_nombre_sp          varchar(50)
-        , @w_descripcion        VARCHAR(100)
+		, @w_saldoagirar_antes  money
+		, @w_cod_error          int
+		, @w_oficina            smallint
+		, @w_descripcion        VARCHAR(100)
         , @w_accion_traza       char(3)
 		, @w_num_reserva        int
+
 		
         
     ----------------------------------------------------------------------
@@ -86,91 +91,55 @@ begin
     set @w_detalle_resultado = 'Generación de cupón de retiro sin tarjeta. OK'
     set @w_valor_comision    = 0
     set @w_ahora             = getdate()
-    set @w_nombre_sp         = 'sp_re_pignora_cta_ahorro'
-    set @w_ah_cuenta         = 0
-    set @w_descripcion       = 'PIGNORACION DE CUENTA DE AHORRO DESDE ATM'
+    set @w_nombre_sp         = 'sp_re_libera_fondos_cte'
+    set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO DE CUENTA DE AHORRO DESDE ATM'
     set @w_return            = 0
     set @w_accion_traza      = ''
 	set @w_num_reserva       = 0
+    set @w_idcta             = 0
+	set @w_saldoagirar_antes = 0
+	set @w_cod_error         = 0
+	set @w_oficina           = 0
 
 
     ----------------------------------------------------------------------
     -- Validar producto bancario asociado a la cuenta
     ----------------------------------------------------------------------
-    select @w_pro_bancario = ah_prod_banc,
-           @w_ah_cuenta    = ah_cuenta
-      from ah_cuenta
-     where ah_cta_banco = @i_cuenta
+    select @w_pro_bancario = cc_prod_banc,
+           @w_idcta        = cc_ctacte
+      from cc_ctacte
+     where cc_cta_banco = @i_cuenta
 
  
     select @w_fecha_proceso = convert(varchar(10),fp_fecha,101)
       from cobis..ba_fecha_proceso
- 
+   
  
     ----------------------------------------------------------------------
-    -- 1 cupon vigente a la vez
+    -- 1 SETEA VALORES
     ----------------------------------------------------------------------    
-    if @i_accion = 'R'-- Reservar
+
+    set @w_accion_traza = 'DPG'   --despignorado
+    set @w_estado       = 'C'     --consumido
+    set @w_num_reserva  = @i_reserva
+    if exists(select 1  from cob_cuentas..cc_his_reserva
+                where hr_ctacte = @w_idcta     and hr_num_reserva = @i_reserva  
+                and hr_estado = 'E' and hr_tipo='P' and hr_valor = @i_valor_pignorar) 
     begin
-	    set @w_accion_traza = 'PIG'   --pignorado
-        set @w_estado       = 'P'     --pendiente
-        if exists(select 1  from cob_ahorros..ah_cuenta_reservada
-                  where cr_cuenta = @w_ah_cuenta      and cr_estado = 'R' and cr_tipo='P')    
-        begin
 
-            select @o_cod_error = 160004
-                 , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
-     
-            return 1
-        end
-    end
+        select @o_cod_error = 160009
+                , @o_msg_error = 'CUPON YA HA SIDO LIBERADO'
+        return 1
+    end	
 
-	if @i_accion = 'E'-- Eliminar 
-	begin
-        set @w_accion_traza = 'DPG'   --despignorado
-        set @w_estado       = 'C'     --consumido
-	    set @w_num_reserva  = @i_sec	
-        if exists(select 1  from cob_ahorros..ah_his_reserva
-                  where hr_cuenta = @w_ah_cuenta   and hr_num_reserva = @i_sec   and hr_estado = 'E' and hr_tipo='P') 
-        begin
-
-            select @o_cod_error = 160009
-                 , @o_msg_error = 'CUPON YA HA SIDO LIBERADO'
-            return 1
-        end	
-	end
-
-    ----------------------------------------------------------------------
-    -- Generación de costos (cob_remesas)
-    ----------------------------------------------------------------------
-  
-  
-   exec @w_return = cob_remesas..sp_genera_costos
-         @t_from        = 'sp_re_pignora_cta_ahorro'
-       , @i_fecha       = @s_date
-       , @i_valor       = 1
-       , @i_categoria   = 'N'
-       , @i_rol_ente    = 'P'
-       , @i_tipo_def    = 'D'
-       , @i_codigo      = 0
-       , @i_tipo_ente   = 'P'
-       , @i_prod_banc   = @w_pro_bancario
-       , @i_producto    = 16
-       , @i_moneda      = @i_moneda
-       , @i_tipo        = 'R'
-       , @i_servicio    = 'CING'
-       , @i_rubro       = 3  --comision
-       , @i_personaliza = 'N'
-       , @i_filial      = 1
-       , @i_oficina     = @s_ofi
-       , @o_valor_total = @w_valor_comision out
 
     --begin transaction
     ----------------------------------------------------------------------
-    -- PIGNORACION:  Reservar fondos en la cuenta de ahorro
+    -- DESPIGNORACION:  Libera fondos en la cuenta de ahorro
     ----------------------------------------------------------------------
 
-    exec @w_return = sp_reserva_fondos_ah
+
+    exec @w_return = sp_reserva_fondos
          @s_ssn        = @s_ssn
        , @s_date       = @s_date
        , @s_sesn       = @s_sesn
@@ -189,21 +158,36 @@ begin
        , @t_trn        = @t_trn
        , @t_ssn_corr   = @t_ssn_corr
        , @i_cta        = @i_cuenta
+
        , @i_valor      = @i_valor_pignorar
        , @i_mon        = @i_moneda
        , @i_accion     = @i_accion
-       , @i_tipo       = 'P'  --nuevo pignoracion
-       , @i_ofi_solic  = @s_ofi 
-       , @i_sec        = @i_sec
+       , @i_tipo       = 'P'  --dias de reserva pignoracion
+       , @i_ofi_solic  = @s_ofi
        , @i_val_reservar = @i_val_reservar
-       , @i_solicita   = @w_descripcion
-       , @i_comision   = @w_valor_comision
-       , @i_tarjeta    = @i_tarjeta
-       , @i_motivo     = @i_motivo
-       , @o_reserva    = @w_num_reserva out
-
+       , @i_solicita    = @i_solicita
+       , @i_comision    = @w_valor_comision
+       , @i_tarjeta     = @i_tarjeta
+       , @i_motivo      = @i_motivo
+       , @i_causa	    = null
+       , @i_aut		    = null
+       , @i_plazo	    = null
+       , @i_cheque      = 0
+       , @i_chq_certi   = 'N' 
+       , @i_reserva     = @i_reserva    --numero de reserva 
+      -- , @i_num_reserva = @i_num_reserva
+     
+       , @o_oficina     = @w_oficina out
+       , @o_cod_error	= @w_cod_error out
+       , @o_reserva     = @w_num_reserva out
+       , @o_saldo_para_girar_antes  = @w_saldoagirar_antes out 
+	   
+   
     if @w_return <> 0
     begin
+        if @w_num_reserva is null
+		   set @w_num_reserva = 0
+		   
         set @w_resultado = 'F'
         set @o_cod_error = @w_return
     end
@@ -220,12 +204,13 @@ begin
         set @w_detalle_resultado = @o_msg_error
 
     end 
-    exec @w_return =  cob_bvirtual..sp_re_traza_retiroefectivo
+
+     exec @w_return =  cob_bvirtual..sp_re_traza_retiroefectivo
       @i_cupon        = @i_cupon
-    , @i_num_reserva  = @w_num_reserva  
+    , @i_num_reserva  = @w_num_reserva	  
     , @i_cliente      = @i_cliente
     , @i_accion       = @w_accion_traza
-    , @i_tipo_cta     = 'AHO'
+    , @i_tipo_cta     = 'CTE'
     , @i_cta_banco    = @i_cuenta
     , @i_moneda       = @i_moneda
     , @i_monto        = @i_valor_pignorar
@@ -247,19 +232,16 @@ begin
         return 1
     end
 
- 
-
-
-    return @w_return
+     return @w_return
 end
 go
 
 
 
 
-if object_id('dbo.sp_re_pignora_cta_ahorro') is not null
-    print '<<< CREATED PROCEDURE dbo.sp_re_pignora_cta_ahorro >>>'
+if object_id('dbo.sp_re_libera_fondos_cte') is not null
+    print '<<< CREATED PROCEDURE dbo.sp_re_libera_fondos_cte >>>'
 else
-    print '<<< FAILED CREATING PROCEDURE dbo.sp_re_pignora_cta_ahorro >>>'
+    print '<<< FAILED CREATING PROCEDURE dbo.sp_re_libera_fondos_cte >>>'
 go
 
