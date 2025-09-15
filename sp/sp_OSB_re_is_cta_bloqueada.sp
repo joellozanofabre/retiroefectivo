@@ -27,34 +27,42 @@ declare
     @w_sp_name      varchar(30),
     @w_tipo_bloqueo varchar(2),
     @w_mensaje      varchar(255),
-	@w_tipo_cuenta  char(3),
-	@w_id_cuenta    int,
-	@w_return       int,
-	@w_cod_cliente  int
+    @w_tipo_cuenta  char(3),
+    @w_id_cuenta    int,
+    @w_return       int,
+    @w_codigo_cliente  int,
+    @w_idcuenta        int ,
+    @w_num_transaccion  smallint,
+    @w_cod_error   int,
+    @w_msg_error   varchar(255)    
 
 
-    set  @w_sp_name = 'sp_OSB_re_is_cta_bloqueada'
-
+  set  @w_sp_name   = 'sp_OSB_re_is_cta_bloqueada'
 	SET @o_num_error  = 0
 	SET @o_desc_error = 'SIN BLOQUEO'
 		
 
--- Llamada al procedimiento
-   exec @w_return    = sp_re_get_tipodecuenta 
-     @i_cuenta_banco = @i_DEBIT_ACCOUNT
-   , @o_id_cliente   = @w_cod_cliente output
-   , @o_tipo_cuenta  = @w_tipo_cuenta output
-   , @o_id_cuenta    = @w_id_cuenta output
-   , @o_cod_error    = @o_num_error output
-   , @o_msg_error    = @o_desc_error output
 
-    if @w_return <> 0
-    begin
-        select @o_num_error ,         @o_desc_error 
-        return 1
-    end
+     --------------------------------------------------------------------------
+    -- Paso 1: Validaciones previas de la pignoración
+    --------------------------------------------------------------------------
+ exec @w_return = sp_re_validacion_generales
+      @i_cuenta_banco   = @i_DEBIT_ACCOUNT
+    , @i_monto          = 0
+    , @i_moneda_iso     = 'NIO'
+    , @o_cliente        = @w_codigo_cliente output
+    , @o_tipo_cuenta    = @w_tipo_cuenta    output
+    , @o_moneda         = @w_num_transaccion OUTPUT 
+    , @o_idcuenta       = @w_idcuenta   output
+    , @o_msg_error      = @w_msg_error   output
+    , @o_num_error      = @w_cod_error   output 
+    IF @w_return != 0
+    BEGIN
+        SET @o_num_error  = @w_cod_error
+        SET @o_desc_error = 'Error en sp_re_validacion_generales: ' + @w_msg_error
+        RETURN 1
+    END
 
- 
 
 if @w_tipo_cuenta = 'CTE'
 begin
@@ -63,7 +71,11 @@ begin
       from cob_cuentas..cc_ctabloqueada
      where cb_cuenta = @w_id_cuenta
        and cb_estado = 'V'
-       and cb_tipo_bloqueo in ('2', '3')
+       and cb_tipo_bloqueo in     (
+        '2',  --	CONTRA RETIRO
+        '3'    -- CONTRA DEPOSITO Y RETIRO
+      )
+
 
     if @@rowcount != 0
     begin
@@ -87,8 +99,11 @@ begin
       from cob_ahorros..ah_ctabloqueada
      where cb_cuenta = @w_id_cuenta
        and cb_estado = 'V'
-       and cb_tipo_bloqueo in ('2', '3')
-
+       and cb_tipo_bloqueo in 
+       (
+        '2',  --	CONTRA RETIRO
+        '3'    -- CONTRA DEPOSITO Y RETIRO
+      )
     if @@rowcount != 0
     begin
         select @w_mensaje = rtrim(valor)

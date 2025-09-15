@@ -40,7 +40,7 @@ CREATE PROCEDURE sp_re_aplica_nd
 
     -- Parámetros de salida
     @o_secuencial    INT          OUTPUT,
-    @o_cod_error     INT          OUTPUT,
+    @o_num_error     INT          OUTPUT,
     @o_msg_error     VARCHAR(255) OUTPUT
 )
 AS
@@ -82,7 +82,7 @@ BEGIN
     ----------------------------------------------------------------------
     SET @w_servicio   = 'RESTD'  -- Servicio de Retiro sin Tarjeta
     SET @w_nombre_sp  = 'sp_re_aplica_nd'
-    SET @o_cod_error  = 0
+    SET @o_num_error  = 0
     SET @o_msg_error  = NULL
     SET @w_return     = 0
 
@@ -105,9 +105,9 @@ BEGIN
 
     IF @w_return > 0
     BEGIN
-        SET @o_cod_error = @w_return
+        SET @o_num_error = @w_return
         SET @o_msg_error = 'Error en sp_ESB_det_servicio'
-        RETURN @o_cod_error
+        RETURN @o_num_error
     END
 
     ----------------------------------------------------------------------
@@ -116,9 +116,9 @@ BEGIN
     EXEC @w_ssn = ADMIN...rp_ssn
     IF @@ERROR != 0 OR @w_ssn = 0
     BEGIN
-        SET @o_cod_error = 1
+        SET @o_num_error = 1
         SET @o_msg_error = 'Error al obtener secuencial rp_ssn'
-        RETURN @o_cod_error
+        RETURN @o_num_error
     END
 
     ----------------------------------------------------------------------
@@ -156,9 +156,9 @@ BEGIN
 
     IF @w_return <> 0 OR @@ERROR <> 0
     BEGIN
-        SET @o_cod_error = @w_return
+        SET @o_num_error = @w_return
         SET @o_msg_error = @w_rpc + ' - Error al realizar el débito en la cuenta: ' + @i_cuenta
-        RETURN @o_cod_error
+        RETURN @o_num_error
     END
 
     ----------------------------------------------------------------------
@@ -184,9 +184,9 @@ BEGIN
 
         IF @@ROWCOUNT  = 0
         BEGIN
-            SET @o_cod_error = 251001
+            SET @o_num_error = 251001
             SET @o_msg_error = 'CUENTA : ' + @i_cuenta  + ' NO EXISTE'
-            RETURN @o_cod_error
+            RETURN @o_num_error
         END
     END
     ELSE IF @i_producto_deb = 'CTE'
@@ -212,9 +212,9 @@ BEGIN
 
         IF @@ROWCOUNT = 0
         BEGIN
-            SET @o_cod_error = 201004
+            SET @o_num_error = 201004
             SET @o_msg_error = 'CUENTA : ' + @i_cuenta  + ' NO EXISTE'
-            RETURN @o_cod_error
+            RETURN @o_num_error
         END
     END
 
@@ -245,9 +245,9 @@ BEGIN
 
     IF @w_return != 0 
     BEGIN
-        SET @o_cod_error = @w_return
+        SET @o_num_error = @w_return
         SET @o_msg_error = 'Error en sp_genera_costos'
-        RETURN @o_cod_error
+        RETURN @o_num_error
     END
 
     SET @w_valor_comision = ISNULL(@w_valor_comision, 0)
@@ -264,9 +264,9 @@ BEGIN
 
         IF @@ROWCOUNT = 0
         BEGIN
-            SET @o_cod_error = 101077
+            SET @o_num_error = 101077
             SET @o_msg_error = 'No existe parámetro NDSRPR'
-            RETURN @o_cod_error
+            RETURN @o_num_error
         END
 
         -- Ejecutar ND de comisión
@@ -294,18 +294,18 @@ BEGIN
 
         IF @w_return != 0
         BEGIN
-            SET @o_cod_error = @w_return
+            SET @o_num_error = @w_return
             SET @o_msg_error = 'Error al aplicar comisión de retiro'
-            RETURN @o_cod_error
+            RETURN @o_num_error
         END
     END 
 
     ----------------------------------------------------------------------
     -- Éxito
     ----------------------------------------------------------------------
-    SET @o_cod_error = 0
+    SET @o_num_error = 0
     SET @o_msg_error = 'Ejecución exitosa'
-    RETURN @o_cod_error
+    RETURN @o_num_error
 END
 GO
 

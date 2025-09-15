@@ -23,18 +23,12 @@ GO
 /* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */ 
 /******************************************************************************/ 
 
--- ===============================================================
--- Procedimiento: sp_OSB_re_pignorar
--- Base:         cob_ahorros
--- Propósito:    Pignorar fondos de una cuenta de ahorro para retiro con cupón.
--- ===============================================================
 if exists (select 1
              from sysobjects
             where name = 'sp_OSB_re_pignorar'
               and type = 'P')
    drop procedure sp_OSB_re_pignorar
 go
-
 
 
 
@@ -58,9 +52,7 @@ BEGIN
         , @w_msg_error   varchar(255)
         , @w_sp_name     varchar(50)
         , @w_return      int
-
-    DECLARE 
-          @i_gen_ssn     char(1)
+        , @i_gen_ssn     char(1)
         , @w_ssn         int
         , @w_user        login
         , @w_sesn        int
@@ -79,7 +71,7 @@ BEGIN
         , @w_num_transaccion  smallint
         , @w_moneda       smallint
         , @w_codigo_cliente  int
-		, @w_idcuenta         int        
+        , @w_idcuenta        int        
 
     --------------------------------------------------------------------------
     -- Inicialización de variables de salida
@@ -92,20 +84,20 @@ BEGIN
     --------------------------------------------------------------------------
     -- Paso 1: Validaciones previas de la pignoración
     --------------------------------------------------------------------------
-    EXEC @w_return = sp_re_valida_pignoracion
-          @i_cuenta_banco = @i_DEBIT_ACCOUNT
-        , @i_monto        = @i_AMOUNT
-        , @i_moneda       = @i_CURRENCY
-        , @o_cliente      = @w_codigo_cliente OUTPUT
-        , @o_tipo_cuenta  = @w_tipo_cuenta    OUTPUT
-        , @o_moneda       = @w_moneda         OUTPUT
-        , @o_msg_error    = @w_msg_error      OUTPUT
-		, @o_idcuenta     = @w_idcuenta       OUTPUT
-		
+ exec @w_return = sp_re_validacion_generales
+      @i_cuenta_banco   = @i_DEBIT_ACCOUNT
+    , @i_monto          = @i_AMOUNT
+    , @i_moneda_iso     = @i_CURRENCY
+    , @o_cliente        = @w_codigo_cliente output
+    , @o_tipo_cuenta    = @w_tipo_cuenta    output
+    , @o_moneda         = @w_num_transaccion OUTPUT 
+    , @o_idcuenta       = @w_idcuenta   output
+    , @o_msg_error      = @w_msg_error   output
+    , @o_num_error      = @w_cod_error   output 
     IF @w_return != 0
     BEGIN
-        SET @o_num_error  = @w_return
-        SET @o_desc_error = 'Error en sp_re_valida_pignoracion: ' + @w_msg_error
+        SET @o_num_error  = @w_cod_error
+        SET @o_desc_error = 'Error en sp_re_validacion_generales: ' + @w_msg_error
         RETURN 1
     END
 
