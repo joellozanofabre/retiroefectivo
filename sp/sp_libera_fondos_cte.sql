@@ -88,7 +88,7 @@ begin
     -- Inicialización
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
-    set @w_detalle_resultado = 'Generación de cupón de retiro sin tarjeta. OK'
+    set @w_detalle_resultado = 'GENERACION DE CUPON DE RETIRO SIN TARJETA'
     set @w_valor_comision    = 0
     set @w_ahora             = getdate()
     set @w_nombre_sp         = 'sp_re_libera_fondos_cte'

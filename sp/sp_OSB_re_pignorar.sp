@@ -37,7 +37,7 @@ CREATE PROCEDURE dbo.sp_OSB_re_pignorar
       @i_DEBIT_ACCOUNT         varchar(35)   = null      -- Cuenta origen a pignorar
     , @i_AMOUNT                money       -- Monto a retirar
     , @i_CURRENCY              char(3)     -- Moneda
-    , @i_CUPON                 varchar(40) -- Cupón generado
+    , @i_CUPON                 varchar(80) -- Cupón generado
     , @o_num_error             int          = null out
     , @o_desc_error            varchar(132) = null out
 )
@@ -46,32 +46,38 @@ BEGIN
     --------------------------------------------------------------------------
     -- Declaración de variables internas
     --------------------------------------------------------------------------
-    DECLARE 
-          @w_error       int
-        , @w_cod_error   int
-        , @w_msg_error   varchar(255)
-        , @w_sp_name     varchar(50)
-        , @w_return      int
-        , @i_gen_ssn     char(1)
-        , @w_ssn         int
-        , @w_user        login
-        , @w_sesn        int
-        , @w_term        varchar(30)
-        , @w_ipaddr      varchar(30)
-        , @w_date        datetime
-        , @w_srv         varchar(30)
-        , @w_lsrv        varchar(30)
-        , @w_ofi         smallint
-        , @w_from        varchar(30)
-        , @w_ejec        char(1)
-        , @w_corr        char(1)
-        , @w_rty         char(1)
-        , @w_tipo_cuenta char(3)
-        , @w_reserva     int
-        , @w_num_transaccion  smallint
-        , @w_moneda       smallint
-        , @w_codigo_cliente  int
-        , @w_idcuenta        int        
+DECLARE
+    -- Caracteres
+      @i_gen_ssn          char(1)
+    , @w_ejec             char(1)
+    , @w_corr             char(1)
+    , @w_rty              char(1)
+    , @w_tipo_cuenta      char(3)
+    -- Números enteros
+    , @w_error            int
+    , @w_cod_error        int
+    , @w_return           int
+    , @w_ssn              int
+    , @w_sesn             int
+    , @w_reserva          int
+    , @w_codigo_cliente   int
+    , @w_idcuenta         int
+    -- Numéricos pequeños
+    , @w_ofi              smallint
+    , @w_num_transaccion  smallint
+    , @w_moneda           smallint
+    -- Texto
+    , @w_msg_error        varchar(255)
+    , @w_sp_name          varchar(50)
+    , @w_term             varchar(30)
+    , @w_ipaddr           varchar(30)
+    , @w_srv              varchar(30)
+    , @w_lsrv             varchar(30)
+    , @w_from             varchar(30)
+    -- Otros tipos
+    , @w_user             login
+    , @w_date             datetime
+       
 
     --------------------------------------------------------------------------
     -- Inicialización de variables de salida
@@ -90,7 +96,7 @@ BEGIN
     , @i_moneda_iso     = @i_CURRENCY
     , @o_cliente        = @w_codigo_cliente output
     , @o_tipo_cuenta    = @w_tipo_cuenta    output
-    , @o_moneda         = @w_num_transaccion OUTPUT 
+    , @o_moneda         = @w_moneda OUTPUT 
     , @o_idcuenta       = @w_idcuenta   output
     , @o_msg_error      = @w_msg_error   output
     , @o_num_error      = @w_cod_error   output 
@@ -155,7 +161,7 @@ BEGIN
             , @i_sec          = 0
             , @i_tarjeta      = '000000000000000'
             , @o_reserva      = @w_reserva   OUT
-            , @o_cod_error    = @w_return    OUTPUT
+            , @o_num_error    = @w_return    OUTPUT
             , @o_msg_error    = @w_msg_error OUTPUT
 
         IF @w_return != 0
@@ -194,7 +200,7 @@ BEGIN
             , @i_sec          = 0
             , @i_tarjeta      = '000000000000000'
             , @o_reserva      = @w_reserva OUT
-            , @o_cod_error    = @w_return OUTPUT
+            , @o_num_error    = @w_return OUTPUT
             , @o_msg_error    = @w_msg_error OUTPUT
 
         IF @w_return != 0
@@ -210,7 +216,9 @@ BEGIN
         SET @o_desc_error = 'Tipo de cuenta inválido'
         RETURN @o_num_error
     END
-
+    ----------------------------------------------------------------------
+    PRINT '-- Éxito'
+    ----------------------------------------------------------------------
     RETURN 0
 END
 

@@ -9,7 +9,7 @@ go
    
 create table re_retiro_efectivo (
     re_id               int identity not null,         -- ID único de la traza
-    re_cupon            varchar(30)     not null,   -- Código único del cupón
+    re_cupon            varchar(80)     not null,   -- Código único del cupón
     re_cliente          int             not null,   -- Cliente que emite el retiro (solo naturales)
     re_accion           char(3)         not null,   -- Acción: PIGNORA, DESPIGNORA, RETIRO
     re_tipo_cta         char(3)         not null,   -- AHO - CTE
@@ -38,6 +38,8 @@ create index ixe_re_cta on re_retiro_efectivo(re_cupon, re_cliente)
 go
 
 
+use cob_bvirtual_his
+go
 
 if exists (select 1 from sysobjects where name = 're_his_retiro_efectivo')
          drop TABLE re_his_retiro_efectivo
@@ -47,7 +49,7 @@ go
 
 create table re_his_retiro_efectivo (
     hr_id               int identity not null,      -- ID único de la traza
-    hr_cupon            varchar(30)     not null,   -- Código único del cupón
+    hr_cupon            varchar(80)     not null,   -- Código único del cupón
     hr_cliente          int             not null,   -- Cliente que emite el retiro (solo naturales)
     hr_accion           char(3)         not null,   -- Acción: PIGNORA, DESPIGNORA, RETIRO
     hr_tipo_cta         char(3)         not null,   -- AHO - CTE
@@ -70,9 +72,8 @@ create table re_his_retiro_efectivo (
 
 go
 
+create index ixe_hr_fecha on re_his_retiro_efectivo(hr_fecha_proc,hr_cupon)
 create index ixe_hr_cliente on re_his_retiro_efectivo(hr_cta_banco)
-create index ixe_hr_cta on re_his_retiro_efectivo(hr_cupon, hr_cliente)
-create index ixe_hr_fecha on re_his_retiro_efectivo(hr_fecha_proc)
 
 
 go

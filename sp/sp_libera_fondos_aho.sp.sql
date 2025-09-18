@@ -42,7 +42,7 @@ create procedure sp_re_libera_fondos_aho
     , @t_ssn_corr       int          = null
 
     -- Datos del retiro
-    , @i_cupon          varchar(30)
+    , @i_cupon          varchar(80)
     , @i_cliente        int
     , @i_cuenta         cuenta
     , @i_valor_pignorar money
@@ -79,20 +79,21 @@ begin
         , @w_msg_error          varchar(100)
         , @w_nombre_sp          varchar(50)
         , @w_descripcion        varchar(100)
-
+        , @w_val_reversar       money
     ----------------------------------------------------------------------
     -- Inicialización
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
-    set @w_detalle_resultado = 'Generación de cupón de retiro sin tarjeta. OK'
-    set @w_valor_comision    = 0
-    set @w_ahora             = getdate()
-    set @w_nombre_sp         = 'sp_re_libera_fondos_aho'
-    set @w_ah_cuenta         = 0
+    set @w_detalle_resultado = 'GENERACION DE CUPON DE RETIRO SIN TARJETA'
     set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO DE CUENTA DE AHORRO DESDE ATM'
+    set @w_nombre_sp         = 'sp_re_libera_fondos_aho'
+    set @w_valor_comision    = 0
+    set @w_ah_cuenta         = 0
     set @w_return            = 0
     set @w_accion_traza      = ''
     set @w_num_reserva       = 0
+    set @w_ahora             = getdate()
+    set @w_val_reversar      = @i_val_reservar
 
     ----------------------------------------------------------------------
     -- Validar producto bancario asociado a la cuenta
@@ -153,7 +154,7 @@ begin
          @i_tipo       = 'P',
          @i_ofi_solic  = @s_ofi,
          @i_sec        = @i_sec,
-         @i_val_reservar = @i_val_reservar,
+         @i_val_reservar = @w_val_reversar,
          @i_solicita   = @w_descripcion,
          @i_comision   = @w_valor_comision,
          @i_tarjeta    = @i_tarjeta,

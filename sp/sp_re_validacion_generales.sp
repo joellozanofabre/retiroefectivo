@@ -26,10 +26,10 @@ AS
 DECLARE
       @w_tipo_ente     CHAR(1)
     , @w_id_cuenta     INT
-    , @w_cod_error     INT
     , @w_multiplo_base DECIMAL(8)
     , @w_return        INT
     , @w_cod_cliente   INT
+    , @w_moneda        SMALLINT
 
     SET @w_tipo_ente = NULL
 
@@ -47,31 +47,41 @@ DECLARE
         RETURN @o_num_error
     END
 
+    ----------------------------------------------------------------------
+    -- Validar que el cupon vigente no se repita 
+    ----------------------------------------------------------------------
+    IF NOT EXISTS (SELECT 1 
+                     FROM re_retiro_efectivo 
+                    WHERE re_cupon = @i_cupon)
+    BEGIN  
+        SELECT @o_estado     = 'E',
+               @o_num_error  = 100,
+               @o_desc_error = 'CUPON YA EXISTE'
+        RETURN 1
+    END
+
 
     ----------------------------------------------------------------------
     -- Validar moneda
     ----------------------------------------------------------------------
     if @i_moneda_iso is null
     begin
-        select @w_cod_error = 18479,
-               @o_msg_error = 'ERROR - MONEDA NO INGRESADA',
-               @o_num_error = @w_cod_error
+        select @o_num_error = 18479,
+               @o_msg_error = 'ERROR - MONEDA NO INGRESADA'
         return @o_num_error 
     end
 
     if len(@i_moneda_iso) <> 3
     begin
-        select @w_cod_error = 121035,
-               @o_msg_error = ' NO EXISTEN DATOS PARA LA MONEDA ESPECIFICADA',
-               @o_num_error = @w_cod_error
+        select @o_num_error = 121035,
+               @o_msg_error = 'NO EXISTEN DATOS PARA LA MONEDA ESPECIFICADA'
         return @o_num_error 
     end
 
     if @i_moneda_iso not in ('USD','NIO')
     begin
-        select @w_cod_error = 1880033,
-               @o_msg_error = 'LA MONEDA EURO NO ESTA PERMITIDA PARA PIGNORACION',
-               @o_num_error = @w_cod_error
+        select @o_num_error = 1880033,
+               @o_msg_error = 'LA MONEDA EURO NO ESTA PERMITIDA PARA PIGNORACION'
         return @o_num_error 
     end   
 
@@ -83,9 +93,8 @@ DECLARE
 
     IF @@ROWCOUNT = 0
     BEGIN
-        SELECT @w_cod_error = 101045,
-               @o_msg_error = 'NO EXISTE MONEDA',
-               @o_num_error = @w_cod_error
+        SELECT @o_num_error = 101045,
+               @o_msg_error = 'NO EXISTE MONEDA'
         RETURN @o_num_error
     END
 
@@ -96,7 +105,7 @@ DECLARE
     if @i_cuenta_banco is null
     begin
         select @o_num_error = 708150,
-               @o_msg_error = 'Campo requerido esta con valor nulo'
+               @o_msg_error = 'CAMPO REQUERIDO - CUENTA DE BANCO'
     return 1
     end
 
@@ -119,23 +128,28 @@ DECLARE
     EXEC @w_return = cob_bvirtual.dbo.sp_ESB_cons_tipo_cta
          @i_canal      = 0,
          @i_cta        = @i_cuenta_banco,
-         @o_mon        = @o_moneda       OUT,
+         @o_mon        = @w_moneda       OUT,
          @o_cuenta     = @w_id_cuenta    OUT,
          @o_tipo_cta   = @o_tipo_cuenta  OUT,
          @o_cliente    = @w_cod_cliente  OUT,
-         @o_num_error  = @w_cod_error    OUT,
+         @o_num_error  = @o_num_error    OUT,
          @o_msg_error  = @o_msg_error    OUT
 
     IF @w_return <> 0
     BEGIN
-        SELECT @w_cod_error = @w_return,
-               @o_msg_error = @o_msg_error,
-               @o_num_error = @w_cod_error
+        SELECT @o_num_error = @w_return,
+               @o_msg_error = @o_msg_error
         RETURN @o_num_error
     END
 
     SELECT @o_idcuenta = @w_id_cuenta
 
+    IF @w_moneda <> @o_moneda
+    BEGIN
+        SELECT @o_num_error = 121036,
+               @o_msg_error = 'MONEDA DE CUENTA NO COINCIDE CON MONEDA INGRESADA'
+        RETURN @o_num_error
+    END
     ----------------------------------------------------------------------
     -- Validar el tipo de cliente
     ----------------------------------------------------------------------
@@ -149,18 +163,16 @@ DECLARE
 
         IF @@ROWCOUNT = 0
         BEGIN
-            SELECT @w_cod_error = 121034,
-                   @o_msg_error = 'CLIENTE NO EXISTE',
-                   @o_num_error = @w_cod_error
+            SELECT @o_num_error = 121034,
+                   @o_msg_error = 'CLIENTE NO EXISTE'
             RETURN @o_num_error
         END
     END
 
     IF @w_tipo_ente <> 'P'
     BEGIN
-        SELECT @w_cod_error = 160007,
-               @o_msg_error = 'CLIENTE NO ES PERSONA NATURAL',
-               @o_num_error = @w_cod_error
+        SELECT @o_num_error = 160007,
+               @o_msg_error = 'CLIENTE NO ES PERSONA NATURAL'
         RETURN @o_num_error
     END
 

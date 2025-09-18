@@ -40,7 +40,7 @@ create procedure sp_re_pignora_cta_corriente
     , @t_ssn_corr       int          = null
 
     -- Datos del retiro
-    , @i_cupon          varchar(30)
+    , @i_cupon          varchar(80)
     , @i_cliente        int
     , @i_cuenta         cuenta
     , @i_valor_pignorar money
@@ -87,7 +87,7 @@ begin
     -- Inicialización
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
-    set @w_detalle_resultado = 'Generación de cupón de retiro sin tarjeta. OK'
+    set @w_detalle_resultado = 'GENERACION DE CUPON DE REETIRO CTA CTE SIN TARJETA ATM'
     set @w_valor_comision    = 0
     set @w_ahora             = getdate()
     set @w_nombre_sp         = 'sp_re_pignora_cta_corriente'

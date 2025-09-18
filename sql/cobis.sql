@@ -121,20 +121,4 @@ FROM cobis..cl_catalogo
 WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 'cc_tipo_reserva')
 GO
 
-/* ============================================================
-   Inserción en parámetros
-   ============================================================ */
 
-IF EXISTS (SELECT 1 FROM cobis..cl_parametro WHERE pa_nemonico = 'MULRET')
-    DELETE FROM cobis..cl_parametro
-    WHERE pa_nemonico = 'MULRET'
-      AND pa_producto = 'CTE'
-
-INSERT INTO cobis..cl_parametro ( pa_parametro                           , pa_nemonico , pa_tipo , pa_money , pa_producto )
-VALUES                          ( 'MULTIPLO DE RETIRO EN EFECTIVO X ATM' , 'MULRET'    , 'M'     , 100      , 'CTE'       )
-GO
-
-SELECT TOP 10 *
-FROM cobis..cl_parametro
-WHERE pa_nemonico = 'MULRET'
-GO

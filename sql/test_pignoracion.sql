@@ -64,7 +64,7 @@ DECLARE
     , @i_monto                 money
     , @i_moneda                char(3)
     , @i_ctaid                 int
-    , @i_cupon                 varchar(40)
+    , @i_cupon                 varchar(80)
     , @o_codigo_respuesta             int
     , @o_detalle_respuesta      varchar(255)
     , @return_code             int

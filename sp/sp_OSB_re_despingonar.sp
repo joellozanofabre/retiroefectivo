@@ -35,49 +35,60 @@ create procedure sp_OSB_re_despignorar
       @i_DEBIT_ACCOUNT         varchar(35) -- Cuenta origen a pignorar
     , @i_AMOUNT                money       -- Monto a retirar
     , @i_CURRENCY              char(3)     -- Moneda
-    , @i_CUPON                 varchar(40) -- Cupón generado
+    , @i_CUPON                 varchar(80) -- Cupón generado
     , @i_REVERSO               char(1)     = 'N'  -- Indica si la transacción es un reverso
-    -- Parámetros de salida
-   	, @o_num_error         int            out
-   	, @o_desc_error        varchar(132)   out
+    , @i_ONLYRELEASE           char(1)     = 'N'  -- Indica si la transacción es para liberar unicamente
+   	, @o_num_error             int            out
+   	, @o_desc_error            varchar(132)   out
 )
-
 as
 begin
     ----------------------------------------------------------------------
     -- Variables locales
     ----------------------------------------------------------------------
-    declare 
-          @i_gen_ssn     char(1)
-        , @w_return       int
-        , @w_msg_error    varchar(255)
-        , @w_secuencial   int
-        , @w_rpc          varchar(64)
-        , @w_tran_deb     int
-        , @w_cod_error    int
-        , @w_causa_deb    varchar(5)
-        , @w_desc_deb     varchar(100)
-        , @w_sp_name     varchar(50)
-        , @w_tipo_cuenta varchar(10)
-        , @w_estado      varchar(10)
-        , @w_codigo_cliente varchar(20)
-        , @w_ssn         int
-        , @w_user        login
-        , @w_sesn        int
-        , @w_term        varchar(30)
-        , @w_ipaddr      varchar(30)
-        , @w_reserva     int
-        , @w_num_transaccion  smallint
-        , @w_moneda       smallint
-        , @w_date        datetime
-        , @w_srv         varchar(30)
-        , @w_lsrv        varchar(30)
-        , @w_ofi         smallint
-        , @w_from        varchar(30)        
-        , @w_ejec        char(1)        
-        , @w_corr        char(1)
-        , @w_rty         char(1)
-        , @w_idcuenta         int 
+declare
+    -- Caracteres
+      @i_gen_ssn             char(1)
+    , @w_ejec                char(1)
+    , @w_corr                char(1)
+    , @w_rty                 char(1)
+    , @w_estado              char(1)
+    , @w_tipo_cuenta         char(3)
+    , @w_aplicanotadedebito  char(1)
+    -- Números enteros
+    , @w_return              int
+    , @w_secuencial          int
+    , @w_tran_deb            int
+    , @w_cod_error           int
+    , @w_codigo_cliente      int
+    , @w_ssn                 int
+    , @w_sesn                int
+    , @w_reserva             int
+    , @w_num_reserva         int
+    , @w_idcuenta            int
+    -- Numéricos pequeños
+    , @w_num_transaccion     smallint
+    , @w_moneda              smallint
+    , @w_ofi                 smallint
+    -- Texto
+    , @w_causa_deb           varchar(5)
+    , @w_msg_error           varchar(255)
+    , @w_desc_deb            varchar(100)
+    , @w_rpc                 varchar(64)
+    , @w_sp_name             varchar(50)
+    , @w_term                varchar(30)
+    , @w_ipaddr              varchar(30)
+    , @w_srv                 varchar(30)
+    , @w_lsrv                varchar(30)
+    , @w_from                varchar(30)
+    , @w_cta_banco           varchar(30)
+    -- Otros tipos
+    , @w_user                login
+    , @w_date                datetime
+    , @w_fecha_expira        datetime
+    , @w_val_reservar        money
+
+
     --------------------------------------------------------------------------
     -- Inicialización de variables de salida
     --------------------------------------------------------------------------
@@ -85,21 +96,30 @@ begin
     SET @o_desc_error      = 'SUCCESS'
     SET @w_sp_name         = 'sp_OSB_re_despignorar'
     SET @w_tipo_cuenta     = ''
+    set @w_val_reservar    = 0
+    set @w_num_reserva     = 0
+    set @w_aplicanotadedebito = 'S'  -- por defecto aplica nota de debito
 
+    if  @i_REVERSO = 'S'
+       set @w_val_reservar = @i_AMOUNT
+
+    print 'Validación de cupón'
     --------------------------------------------------------------------------
     -- Paso 2: Validación de cupón
     --------------------------------------------------------------------------
     EXEC @w_return = sp_re_valida_cupon
-          @i_cupon     = @i_CUPON
-        , @o_cliente   = @w_codigo_cliente  OUT
-        , @o_cta_banco = @i_DEBIT_ACCOUNT   OUT
-        , @o_tipo_cta  = @w_tipo_cuenta     OUT
-        , @o_moneda    = @w_moneda          OUT
-        , @o_monto     = @i_AMOUNT          OUT
-        , @o_estado    = @w_estado          OUT
-        , @o_num_error = @w_cod_error       OUT
-        , @o_desc_error = @w_msg_error       OUT
-
+          @i_cupon        = @i_CUPON
+        , @i_valor        = @i_AMOUNT
+        , @o_cliente      = @w_codigo_cliente  OUT
+        , @o_cta_banco    = @w_cta_banco       OUT
+        , @o_tipo_cta     = @w_tipo_cuenta     OUT
+        , @o_moneda       = @w_moneda          OUT
+        , @o_monto        = @i_AMOUNT          OUT
+        , @o_estado       = @w_estado          OUT
+        , @o_num_error    = @w_cod_error       OUT
+        , @o_desc_error   = @w_msg_error       OUT
+        , @o_fecha_expira = @w_fecha_expira    OUT
+        , @o_num_reserva  = @w_num_reserva     OUT
     IF @w_return <> 0
     BEGIN
         SELECT
@@ -107,7 +127,29 @@ begin
             , @o_desc_error = 'Error en sp_re_valida_cupon: ' + @w_msg_error
         RETURN 1
     END
+    --------------------------------------------------------------------------
+    -- Paso 2.1: Si el cupón está expirado, eliminar de tabla vigente
+    --------------------------------------------------------------------------
 
+    IF @w_estado = 'X'
+    BEGIN
+        print 'El cupón está expirado, se procede a eliminar de tabla vigente re_retiro_efectivo'
+        DELETE FROM re_retiro_efectivo
+        WHERE re_cupon = @i_CUPON
+
+        IF @@error <> 0
+        BEGIN
+            SET @o_num_error  = 600
+            SET @o_desc_error = 'Error al eliminar cupón expirado en tabla re_retiro_efectivo'
+            RETURN 1
+        END
+
+        -- Devolver mensaje de expiración
+        SET @o_num_error  = 101
+        SET @o_desc_error = 'Cupón expirado y eliminado de tabla viva'
+        
+    END
+print 'sp_OSB_datos_conexion'
     --------------------------------------------------------------------------
     -- Paso 1: Obtener datos de sesión / seguridad COBIS
     --------------------------------------------------------------------------
@@ -134,79 +176,97 @@ begin
     ----------------------------------------------------------------------
     begin tran TRANSACCION_RETIRO
 
-    ----------------------------------------------------------------------
-    -- 1. Liberar fondos (despignorar)
-    ----------------------------------------------------------------------
-    exec @w_return = cob_cuentas..sp_re_libera_fondos
-              @s_ssn          = @w_ssn
-            , @s_srv          = @w_srv
-            , @s_lsrv         = @w_lsrv
-            , @s_user         = @w_user
-            , @s_sesn         = @w_sesn
-            , @s_term         = @w_term
-            , @s_date         = @w_date
-            , @s_ofi          = @w_ofi
-            , @s_org          = 'N'
-            , @t_from         = @w_from
-            , @t_ejec         = @w_ejec
-            , @t_corr         = @w_corr
-            , @t_rty          = @w_rty
-            , @t_trn          = 4083 
-            , @i_cuenta       = @i_DEBIT_ACCOUNT
-            , @i_valor_pignorar = @i_AMOUNT
-            , @i_moneda       = @w_moneda
-            , @i_accion       = 'L'  -- reservar
-            , @i_cupon        = @i_CUPON
-            , @i_cliente      = @w_codigo_cliente
-            , @i_val_reservar = 0
-            , @i_motivo       = 2
-            , @i_sec          = 0
-            , @i_tarjeta      = '000000000000000'
-            , @o_reserva      = @w_reserva   OUT
-            , @o_cod_error    = @w_return    OUTPUT
-            , @o_msg_error    = @w_msg_error OUTPUT
-        IF @w_return != 0
-        BEGIN
-            SET @o_num_error  = @w_return
-            SET @o_desc_error = 'Error en sp_re_pignora_cta_ahorro: ' + @w_msg_error
-            rollback tran TRANSACCION_RETIRO
-            RETURN 1
-        END
- 
-
+        ----------------------------------------------------------------------
+        print '-- 1. Liberar fondos (despignorar) @w_reserva %1! @i_DEBIT_ACCOUNT %2!', @w_num_reserva,@i_DEBIT_ACCOUNT
+        ----------------------------------------------------------------------
+        exec @w_return = sp_re_libera_fondos
+                  @s_ssn          = @w_ssn
+                , @s_srv          = @w_srv
+                , @s_lsrv         = @w_lsrv
+                , @s_user         = @w_user
+                , @s_sesn         = @w_sesn
+                , @s_term         = @w_term
+                , @s_date         = @w_date
+                , @s_ofi          = @w_ofi
+                , @s_org          = 'N'
+                , @t_from         = @w_from
+                , @t_ejec         = @w_ejec
+                , @t_corr         = @w_corr
+                , @t_rty          = @w_rty
+                , @t_trn          = 318 
+                , @i_cuenta       = @i_DEBIT_ACCOUNT
+                , @i_valor_pignorar = @i_AMOUNT
+                , @i_moneda       = @w_moneda
+                , @i_accion       = 'E'  -- reservar
+                , @i_cupon        = @i_CUPON
+                , @i_cliente      = @w_codigo_cliente
+                , @i_val_reservar = @w_val_reservar
+                , @i_motivo       = 2
+                , @i_sec          = @w_num_reserva
+                , @i_reserva      = @w_reserva    --numero de reserva  ??
+                , @i_tipo_cta     = @w_tipo_cuenta
+                , @i_fecha_expira = @w_fecha_expira
+                , @i_tarjeta      = '000000000000000'
+                , @o_reserva      = @w_reserva   OUT
+                , @o_cod_error    = @w_return    OUTPUT
+                , @o_msg_error    = @w_msg_error OUTPUT
+            IF @w_return != 0
+            BEGIN
+                SET @o_num_error  = @w_return
+                SET @o_desc_error = 'Error en sp_re_libera_fondos: ' + @w_msg_error
+                print 'ROLLBAXK'
+                rollback tran TRANSACCION_RETIRO
+                RETURN 1
+            END
     
-    ----------------------------------------------------------------------
-    -- 2. Aplicar Nota de Débito (debitando la cuenta origen)
-    ----------------------------------------------------------------------
-    exec @w_return = cob_bvirtual..sp_re_aplica_nd
-         @s_srv          = @w_srv,
-         @s_user         = @w_user,
-         @s_sesn         = @w_sesn,
-         @s_term         = @w_term,
-         @s_date         = @w_date,
-         @s_lsrv         = @w_lsrv,
-         @s_ofi          = @w_ofi,
-         @i_cupon        = @i_CUPON,
-         @i_cliente      = @w_codigo_cliente,
-         @i_cuenta       = @i_DEBIT_ACCOUNT,
-         @i_valor_debitar= @i_AMOUNT,
-         @i_moneda_iso   = @i_CURRENCY,
-         @i_moneda_tran  = @w_moneda,
-         @i_producto_deb = @w_tipo_cuenta,
-         @i_reverso      = @i_REVERSO,
-         @o_secuencial   = @w_secuencial out,
-         @o_num_error    = @w_return out,
-         @o_desc_error   = @w_msg_error out
-        IF @w_return != 0
-        BEGIN
-            SET @o_num_error  = @w_return
-            SET @o_desc_error = 'Error en sp_re_aplica_nd: ' + @w_msg_error
-            rollback tran TRANSACCION_RETIRO
-            RETURN 1
-        END
+        ----------------------------------------------------------------------
+        -- si no esta expirado y no es solo liberacion
+        ----------------------------------------------------------------------        
+        print '@w_estado %1! , @i_ONLYRELEASE %2!, @w_aplicanotadedebito %3!', @w_estado , @i_ONLYRELEASE , @w_aplicanotadedebito
 
+        IF @w_estado = 'X'  or @i_ONLYRELEASE = 'S'
+          set @w_aplicanotadedebito = 'N'  -- no aplica nota de debito
+
+
+        ----------------------------------------------------------------------
+        -- 2. Aplicar Nota de Débito (debitando la cuenta origen)'
+        ----------------------------------------------------------------------
+        print '@w_aplicanotadedebito %1!' , @w_aplicanotadedebito
+
+
+        IF @w_aplicanotadedebito = 'S'
+        begin
+            exec @w_return = cob_bvirtual..sp_re_aplica_nd
+                @s_srv          = @w_srv,
+                @s_user         = @w_user,
+                @s_sesn         = @w_sesn,
+                @s_term         = @w_term,
+                @s_date         = @w_date,
+                @s_lsrv         = @w_lsrv,
+                @s_ofi          = @w_ofi,
+                @i_cupon        = @i_CUPON,
+                @i_cliente      = @w_codigo_cliente,
+                @i_cuenta       = @i_DEBIT_ACCOUNT,
+                @i_valor_debitar= @i_AMOUNT,
+                @i_moneda_iso   = @i_CURRENCY,
+                @i_moneda_tran  = @w_moneda,
+                @i_num_reserva  = @w_num_reserva,
+                @i_producto_deb = @w_tipo_cuenta,
+                @i_reverso      = @i_REVERSO,
+                @i_fecha_expira = @w_fecha_expira,
+                @o_secuencial   = @w_secuencial out,
+                @o_num_error    = @w_return out,
+                @o_desc_error   = @w_msg_error out
+                IF @w_return != 0
+                BEGIN
+                    SET @o_num_error  = @w_return
+                    SET @o_desc_error = 'Error en sp_re_aplica_nd: ' + @w_msg_error
+                    rollback tran TRANSACCION_RETIRO
+                    RETURN 1
+                END
+        end
     ----------------------------------------------------------------------
-    -- Éxito
+    PRINT '-- Éxito'
     ----------------------------------------------------------------------
     commit tran TRANSACCION_RETIRO
     set @o_num_error = 0

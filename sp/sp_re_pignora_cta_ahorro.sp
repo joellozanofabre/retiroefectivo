@@ -39,7 +39,7 @@ create procedure sp_re_pignora_cta_ahorro
     , @t_ssn_corr       int          = null
 
     -- Datos del retiro
-    , @i_cupon          varchar(30)
+    , @i_cupon          varchar(80)
     , @i_cliente        int
     , @i_cuenta         cuenta
     , @i_valor_pignorar money
@@ -53,7 +53,7 @@ create procedure sp_re_pignora_cta_ahorro
 
     -- Salidas
     --, @o_reserva        int          = 0 out
-    , @o_cod_error      int          output
+    , @o_num_error      int          output
     , @o_msg_error      varchar(255) output
 )
 as
@@ -69,7 +69,6 @@ begin
         , @w_resultado          char(1)
         , @w_pro_bancario       smallint
         , @w_valor_comision     money
-        , @w_detalle_resultado  varchar(100)
         , @w_ahora              datetime
         , @w_fecha_proceso      datetime
         , @w_msg_error          varchar(100)
@@ -78,18 +77,17 @@ begin
         , @w_accion_traza       char(3)
         , @w_num_reserva        int
         , @w_fecha_expira       datetime
-		
+		    , @w_cod_error          int
         
     ----------------------------------------------------------------------
     -- Inicialización
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
-    set @w_detalle_resultado = 'Generación de cupón de retiro sin tarjeta. OK'
     set @w_valor_comision    = 0
     set @w_ahora             = getdate()
     set @w_nombre_sp         = 'sp_re_pignora_cta_ahorro'
     set @w_ah_cuenta         = 0
-    set @w_descripcion       = 'PIGNORACION DE CUENTA DE AHORRO DESDE ATM'
+    set @w_descripcion       = 'CUPON POR RETIRO EFECTIVO EN ATM ' + @i_cupon
     set @w_return            = 0
     set @w_accion_traza      = ''
 	  set @w_num_reserva       = 0
@@ -115,10 +113,10 @@ begin
     set @w_accion_traza = 'PIG'   --pignorado
     set @w_estado       = 'G'     --Generado
     if exists(select 1  from cob_ahorros..ah_cuenta_reservada
-              where cr_cuenta = @w_ah_cuenta      and cr_estado = 'R' and cr_tipo='P')    
+              where cr_cuenta = @w_ah_cuenta   and cr_estado = 'R' and cr_tipo='P')    
     begin
 
-        select @o_cod_error = 160004
+        select @o_num_error = 160004
               , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
 
         return 1
@@ -165,20 +163,18 @@ begin
     if @w_return <> 0
     begin
         set @w_resultado = 'F'
-        set @o_cod_error = @w_return
+        set @o_num_error = @w_return
     end
     
     ----------------------------------------------------------------------
     -- Registrar la traza en re_retiro_efectivo
     ----------------------------------------------------------------------
-    if @o_cod_error != 0
+    if @o_num_error != 0
     begin
         select @o_msg_error = mensaje
           from cobis..cl_errores
-         where numero = @o_cod_error
-         
-        set @w_detalle_resultado = @o_msg_error
-
+         where numero = @o_num_error
+        
     end 
 
     set  @w_fecha_expira = dateadd(hour, 24,  @w_ahora)
@@ -193,18 +189,19 @@ begin
     , @i_moneda       = @i_moneda
     , @i_monto        = @i_valor_pignorar
     , @i_hora_ult_proc= @w_ahora
-    , @i_fecha_expira = null
+    , @i_fecha_expira = @w_fecha_expira
     , @i_estado       = @w_estado   --P=Pendiente, C=Consumido, X=Expirado
     , @i_fecha_proc   = @w_fecha_proceso
     , @i_usuario      = @s_user
     , @i_terminal     = @s_term
     , @i_oficina      = @s_ofi
     , @i_resultado    = @w_resultado
-    , @i_detalle      = @w_detalle_resultado
-    , @o_msg_error    = @w_msg_error output
+    , @i_detalle      = @w_descripcion
+    , @o_num_error    = @w_cod_error      output
+    , @o_msg_error    = @w_msg_error   output
     if @w_return != 0
     begin
-        set @o_cod_error = @w_return
+        set @o_num_error = @w_cod_error
         set @o_msg_error = @w_msg_error
 
         return 1
