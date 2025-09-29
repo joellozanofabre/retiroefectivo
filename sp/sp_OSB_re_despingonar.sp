@@ -1,27 +1,27 @@
 use cob_bvirtual
 go
-/******************************************************************************/ 
-/* Archivo:              sp_OSB_re_despignorar.sp                             */ 
-/* Stored procedure:     sp_OSB_re_despignorar                                */ 
-/* Base de datos:        cob_bvirtual                                         */ 
-/* Producto:             Banca Virtual                                        */ 
-/* Diseñado por:         Joel Lozano                                          */ 
-/* Fecha de escritura:   21/Agosto/2025                                       */ 
-/******************************************************************************/ 
-/*                                  IMPORTANTE                                */ 
-/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */ 
-/* de Grupo Financiero Ficohsa.                                               */ 
-/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */ 
-/* sin la previa autorización.                                                */ 
-/******************************************************************************/ 
-/*                                  PROPÓSITO                                 */ 
+/******************************************************************************/
+/* Archivo:              sp_OSB_re_despignorar.sp                             */
+/* Stored procedure:     sp_OSB_re_despignorar                                */
+/* Base de datos:        cob_bvirtual                                         */
+/* Producto:             Banca Virtual                                        */
+/* Diseñado por:         Joel Lozano                                          */
+/* Fecha de escritura:   21/Agosto/2025                                       */
+/******************************************************************************/
+/*                                  IMPORTANTE                                */
+/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */
+/* de Grupo Financiero Ficohsa.                                               */
+/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */
+/* sin la previa autorización.                                                */
+/******************************************************************************/
+/*                                  PROPÓSITO                                 */
 /* Orquestar el proceso de  despignoración y aplicacion de debito a la cuenta */
-/* de ahorro o corriente  mediante cupón.                                     */ 
-/******************************************************************************/ 
-/*                               MODIFICACIONES                               */ 
-/* FECHA        AUTOR                     TAREA             RAZÓN             */ 
-/* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */ 
-/******************************************************************************/ 
+/* de ahorro o corriente  mediante cupón.                                     */
+/******************************************************************************/
+/*                               MODIFICACIONES                               */
+/* FECHA        AUTOR                     TAREA             RAZÓN             */
+/* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */
+/******************************************************************************/
 
 if exists (select 1
              from sysobjects
@@ -103,7 +103,6 @@ declare
     if  @i_REVERSO = 'S'
        set @w_val_reservar = @i_AMOUNT
 
-    print 'Validación de cupón'
     --------------------------------------------------------------------------
     -- Paso 2: Validación de cupón
     --------------------------------------------------------------------------
@@ -130,10 +129,9 @@ declare
     --------------------------------------------------------------------------
     -- Paso 2.1: Si el cupón está expirado, eliminar de tabla vigente
     --------------------------------------------------------------------------
-
     IF @w_estado = 'X'
     BEGIN
-        print 'El cupón está expirado, se procede a eliminar de tabla vigente re_retiro_efectivo'
+
         DELETE FROM re_retiro_efectivo
         WHERE re_cupon = @i_CUPON
 
@@ -147,9 +145,9 @@ declare
         -- Devolver mensaje de expiración
         SET @o_num_error  = 101
         SET @o_desc_error = 'Cupón expirado y eliminado de tabla viva'
-        
+
     END
-print 'sp_OSB_datos_conexion'
+
     --------------------------------------------------------------------------
     -- Paso 1: Obtener datos de sesión / seguridad COBIS
     --------------------------------------------------------------------------
@@ -175,9 +173,8 @@ print 'sp_OSB_datos_conexion'
     -- Inicia transacción
     ----------------------------------------------------------------------
     begin tran TRANSACCION_RETIRO
-
         ----------------------------------------------------------------------
-        print '-- 1. Liberar fondos (despignorar) @w_reserva %1! @i_DEBIT_ACCOUNT %2!', @w_num_reserva,@i_DEBIT_ACCOUNT
+        -- 1. Liberar fondos (despignorar)
         ----------------------------------------------------------------------
         exec @w_return = sp_re_libera_fondos
                   @s_ssn          = @w_ssn
@@ -193,7 +190,7 @@ print 'sp_OSB_datos_conexion'
                 , @t_ejec         = @w_ejec
                 , @t_corr         = @w_corr
                 , @t_rty          = @w_rty
-                , @t_trn          = 318 
+                , @t_trn          = 318  --Despignorar
                 , @i_cuenta       = @i_DEBIT_ACCOUNT
                 , @i_valor_pignorar = @i_AMOUNT
                 , @i_moneda       = @w_moneda
@@ -203,27 +200,23 @@ print 'sp_OSB_datos_conexion'
                 , @i_val_reservar = @w_val_reservar
                 , @i_motivo       = 2
                 , @i_sec          = @w_num_reserva
-                , @i_reserva      = @w_reserva    --numero de reserva  ??
+                , @i_reserva      = @w_num_reserva
                 , @i_tipo_cta     = @w_tipo_cuenta
                 , @i_fecha_expira = @w_fecha_expira
                 , @i_tarjeta      = '000000000000000'
                 , @o_reserva      = @w_reserva   OUT
-                , @o_cod_error    = @w_return    OUTPUT
-                , @o_msg_error    = @w_msg_error OUTPUT
+                , @o_num_error    = @w_return    OUTPUT
+                , @o_desc_error    = @w_msg_error OUTPUT
             IF @w_return != 0
             BEGIN
                 SET @o_num_error  = @w_return
                 SET @o_desc_error = 'Error en sp_re_libera_fondos: ' + @w_msg_error
-                print 'ROLLBAXK'
                 rollback tran TRANSACCION_RETIRO
                 RETURN 1
             END
-    
         ----------------------------------------------------------------------
         -- si no esta expirado y no es solo liberacion
-        ----------------------------------------------------------------------        
-        print '@w_estado %1! , @i_ONLYRELEASE %2!, @w_aplicanotadedebito %3!', @w_estado , @i_ONLYRELEASE , @w_aplicanotadedebito
-
+        ----------------------------------------------------------------------
         IF @w_estado = 'X'  or @i_ONLYRELEASE = 'S'
           set @w_aplicanotadedebito = 'N'  -- no aplica nota de debito
 
@@ -231,8 +224,6 @@ print 'sp_OSB_datos_conexion'
         ----------------------------------------------------------------------
         -- 2. Aplicar Nota de Débito (debitando la cuenta origen)'
         ----------------------------------------------------------------------
-        print '@w_aplicanotadedebito %1!' , @w_aplicanotadedebito
-
 
         IF @w_aplicanotadedebito = 'S'
         begin
@@ -265,8 +256,10 @@ print 'sp_OSB_datos_conexion'
                     RETURN 1
                 END
         end
+
+
     ----------------------------------------------------------------------
-    PRINT '-- Éxito'
+    -- Éxito
     ----------------------------------------------------------------------
     commit tran TRANSACCION_RETIRO
     set @o_num_error = 0

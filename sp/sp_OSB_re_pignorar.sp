@@ -1,27 +1,27 @@
 USE cob_bvirtual
 GO
-/******************************************************************************/ 
-/* Archivo:              sp_OSB_re_pingonar.sp                                */ 
-/* Stored procedure:     sp_OSB_re_pingonar                                   */ 
-/* Base de datos:        cob_bvirtual                                         */ 
-/* Producto:             Banca Virtual                                        */ 
-/* Diseñado por:         Joel Lozano                                          */ 
-/* Fecha de escritura:   21/Agosto/2025                                       */ 
-/******************************************************************************/ 
-/*                                  IMPORTANTE                                */ 
-/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */ 
-/* de Grupo Financiero Ficohsa.                                               */ 
-/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */ 
-/* sin la previa autorización.                                                */ 
-/******************************************************************************/ 
-/*                                  PROPÓSITO                                 */ 
-/* Orquestar el proceso de  despignoración de cuentas de ahorro o corriente   */ 
-/* corriente para operaciones de Retiro Efectivo mediante cupón.              */ 
-/******************************************************************************/ 
-/*                               MODIFICACIONES                               */ 
-/* FECHA        AUTOR                     TAREA             RAZÓN             */ 
-/* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */ 
-/******************************************************************************/ 
+/******************************************************************************/
+/* Archivo:              sp_OSB_re_pingonar.sp                                */
+/* Stored procedure:     sp_OSB_re_pingonar                                   */
+/* Base de datos:        cob_bvirtual                                         */
+/* Producto:             Banca Virtual                                        */
+/* Diseñado por:         Joel Lozano                                          */
+/* Fecha de escritura:   21/Agosto/2025                                       */
+/******************************************************************************/
+/*                                  IMPORTANTE                                */
+/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */
+/* de Grupo Financiero Ficohsa.                                               */
+/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */
+/* sin la previa autorización.                                                */
+/******************************************************************************/
+/*                                  PROPÓSITO                                 */
+/* Orquestar el proceso de  despignoración de cuentas de ahorro o corriente   */
+/* corriente para operaciones de Retiro Efectivo mediante cupón.              */
+/******************************************************************************/
+/*                               MODIFICACIONES                               */
+/* FECHA        AUTOR                     TAREA             RAZÓN             */
+/* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */
+/******************************************************************************/
 
 if exists (select 1
              from sysobjects
@@ -77,7 +77,7 @@ DECLARE
     -- Otros tipos
     , @w_user             login
     , @w_date             datetime
-       
+
 
     --------------------------------------------------------------------------
     -- Inicialización de variables de salida
@@ -96,10 +96,10 @@ DECLARE
     , @i_moneda_iso     = @i_CURRENCY
     , @o_cliente        = @w_codigo_cliente output
     , @o_tipo_cuenta    = @w_tipo_cuenta    output
-    , @o_moneda         = @w_moneda OUTPUT 
+    , @o_moneda         = @w_moneda OUTPUT
     , @o_idcuenta       = @w_idcuenta   output
     , @o_msg_error      = @w_msg_error   output
-    , @o_num_error      = @w_cod_error   output 
+    , @o_num_error      = @w_cod_error   output
     IF @w_return != 0
     BEGIN
         SET @o_num_error  = @w_cod_error
@@ -217,7 +217,7 @@ DECLARE
         RETURN @o_num_error
     END
     ----------------------------------------------------------------------
-    PRINT '-- Éxito'
+    '-- Éxito'
     ----------------------------------------------------------------------
     RETURN 0
 END

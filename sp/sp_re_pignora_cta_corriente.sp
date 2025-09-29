@@ -55,7 +55,7 @@ create procedure sp_re_pignora_cta_corriente
 	, @i_reserva        int          = 0
     -- Salidas
     , @o_reserva        int          = 0 out
-    , @o_cod_error      int          output
+    , @o_num_error      int          output
     , @o_msg_error      varchar(255) output
 )
 as
@@ -72,7 +72,6 @@ begin
         , @w_pro_bancario       smallint
         , @w_valor_comision     money
         , @w_detalle_resultado  varchar(100)
-        , @w_ahora              datetime
         , @w_fecha_proceso      datetime
         , @w_msg_error          varchar(100)
         , @w_nombre_sp          varchar(50)
@@ -82,23 +81,19 @@ begin
 		, @w_descripcion        VARCHAR(100)
         , @w_accion_traza       char(3)
 		, @w_num_reserva        int
-
+        , @w_fecha_expira       datetime
     ----------------------------------------------------------------------
     -- Inicialización
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
-    set @w_detalle_resultado = 'GENERACION DE CUPON DE REETIRO CTA CTE SIN TARJETA ATM'
     set @w_valor_comision    = 0
-    set @w_ahora             = getdate()
     set @w_nombre_sp         = 'sp_re_pignora_cta_corriente'
     set @w_idcta             = 0
-	set @w_saldoagirar_antes = 0
-	set @w_cod_error         = 0
-	set @w_oficina           = 0
-	set @w_return            = 0
-	set @w_accion_traza      = ''
-    set @w_num_reserva       = 0
- 
+    set @w_descripcion       = 'VALOR RESERVADO - RETIRO DE EFECTIVO SIN TD ' + @i_cupon
+    set @w_return            = 0
+    set @w_accion_traza      = ''
+	set @w_num_reserva       = 0
+
 
     ----------------------------------------------------------------------
     -- Validar producto bancario asociado a la cuenta
@@ -108,31 +103,31 @@ begin
       from cc_ctacte
      where cc_cta_banco = @i_cuenta
 
- 
+
     select @w_fecha_proceso = convert(varchar(10),fp_fecha,101)
       from cobis..ba_fecha_proceso
-   
- 
-	  
+
+
+
      ----------------------------------------------------------------------
     -- 1 cupon vigente a la vez
-    ----------------------------------------------------------------------    
+    ----------------------------------------------------------------------
 
     set @w_accion_traza = 'PIG'   --pignorado
     set @w_estado       = 'G'     --Generado
     if exists(select 1  from cob_cuentas..cc_cuenta_reservada
                 where cr_ctacte = @w_idcta      and cr_estado = 'R'
-                and cr_tipo='P')  
+                and cr_tipo='P')
     begin
-        select @o_cod_error = 160004
+        select @o_num_error = 160004
                 , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
-    
+
         return 1
-    end	
+    end
 
 
 
- 
+
 
     ----------------------------------------------------------------------
     -- PIGNORACION:  Reservar fondos en la cuenta corriente
@@ -157,14 +152,13 @@ begin
        , @t_trn        = @t_trn
        , @t_ssn_corr   = @t_ssn_corr
        , @i_cta        = @i_cuenta
-
        , @i_valor      = @i_valor_pignorar
        , @i_mon        = @i_moneda
        , @i_accion     = @i_accion
        , @i_tipo       = 'P'  --dias de reserva pignoracion
        , @i_ofi_solic  = @s_ofi
        , @i_val_reservar = @i_val_reservar
-       , @i_solicita    = @i_solicita
+       , @i_solicita    = @w_descripcion
        , @i_comision    = @w_valor_comision
        , @i_tarjeta     = @i_tarjeta
        , @i_motivo      = @i_motivo
@@ -172,60 +166,62 @@ begin
        , @i_aut		    = null
        , @i_plazo	    = null
        , @i_cheque      = 0
-       , @i_chq_certi   = 'N' 
-       , @i_reserva     = @i_reserva    --numero de reserva 
+       , @i_chq_certi   = 'N'
+       , @i_reserva     = @i_reserva    --numero de reserva
        , @i_num_reserva = @i_num_reserva
-     
+
        , @o_oficina     = @w_oficina out
-       , @o_cod_error	= @w_cod_error out
+       , @o_num_error	= @w_cod_error out
        , @o_reserva     = @w_num_reserva out
-       , @o_saldo_para_girar_antes  = @w_saldoagirar_antes out 
-	   
-   
+       , @o_saldo_para_girar_antes  = @w_saldoagirar_antes out
+
+
     if @w_return <> 0
     begin
         if @w_num_reserva is null
 		   set @w_num_reserva = 0
-		   
+
         set @w_resultado = 'F'
-        set @o_cod_error = @w_return
+        set @o_num_error = @w_return
     end
 
     ----------------------------------------------------------------------
     -- Registrar la traza en re_retiro_efectivo
     ----------------------------------------------------------------------
-    if @o_cod_error != 0
+    if @o_num_error != 0
     begin
         select @o_msg_error = mensaje
           from cobis..cl_errores
-         where numero = @o_cod_error
-         
+         where numero = @o_num_error
+
         set @w_detalle_resultado = @o_msg_error
-		
+
     end
-	
+
+    set  @w_fecha_expira = dateadd(hour, 24,  getdate())
+
      exec @w_return =  cob_bvirtual..sp_re_traza_retiroefectivo
       @i_cupon        = @i_cupon
-    , @i_num_reserva  = @w_num_reserva	  
+    , @i_num_reserva  = @w_num_reserva
     , @i_cliente      = @i_cliente
     , @i_accion       = @w_accion_traza
     , @i_tipo_cta     = 'CTE'
     , @i_cta_banco    = @i_cuenta
     , @i_moneda       = @i_moneda
     , @i_monto        = @i_valor_pignorar
-    , @i_fecha_gen    = @w_ahora
+    , @i_fecha_expira = @w_fecha_expira
     , @i_estado       = @w_estado   --P=Pendiente, C=Consumido, X=Expirado
-    , @i_cliente_dest = null
-    , @i_fecha        = @w_fecha_proceso
+    , @i_fecha_proc   = @w_fecha_proceso
     , @i_usuario      = @s_user
     , @i_terminal     = @s_term
     , @i_oficina      = @s_ofi
     , @i_resultado    = @w_resultado
-    , @i_detalle      = @w_detalle_resultado
-    , @o_msg_error    = @w_msg_error output
+    , @i_detalle      = @w_descripcion
+    , @o_num_error    = @w_cod_error      output
+    , @o_msg_error    = @w_msg_error   output
     if @w_return != 0
     begin
-        set @o_cod_error = @w_return
+        set @o_num_error = @w_return
         set @o_msg_error = @w_msg_error
 
         return 1

@@ -1,27 +1,27 @@
 USE cob_bvirtual
 GO
-/******************************************************************************/ 
-/* Archivo:              sp_re_valida_cupon.sp                                */ 
-/* Stored procedure:     sp_re_valida_cupon                                   */ 
-/* Base de datos:        cob_bvirtual                                         */ 
-/* Producto:             Banca Virtual                                        */ 
-/* Diseñado por:         Joel Lozano                                          */ 
-/* Fecha de escritura:   21/Agosto/2025                                       */ 
-/******************************************************************************/ 
-/*                                  IMPORTANTE                                */ 
-/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */ 
-/* de Grupo Financiero Ficohsa.                                               */ 
-/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */ 
-/* sin la previa autorización.                                                */ 
-/******************************************************************************/ 
-/*                                  PROPÓSITO                                 */ 
-/* Validar la vigencia de un cupón de retiro efectivo y actualizar su estado  */ 
-/* (Consumido, Expirado, En Validación) moviéndolo al histórico cuando aplique*/ 
-/******************************************************************************/ 
-/*                               MODIFICACIONES                               */ 
-/* FECHA        AUTOR                     TAREA             RAZÓN             */ 
-/* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */ 
-/******************************************************************************/ 
+/******************************************************************************/
+/* Archivo:              sp_re_valida_cupon.sp                                */
+/* Stored procedure:     sp_re_valida_cupon                                   */
+/* Base de datos:        cob_bvirtual                                         */
+/* Producto:             Banca Virtual                                        */
+/* Diseñado por:         Joel Lozano                                          */
+/* Fecha de escritura:   21/Agosto/2025                                       */
+/******************************************************************************/
+/*                                  IMPORTANTE                                */
+/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */
+/* de Grupo Financiero Ficohsa.                                               */
+/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */
+/* sin la previa autorización.                                                */
+/******************************************************************************/
+/*                                  PROPÓSITO                                 */
+/* Validar la vigencia de un cupón de retiro efectivo y actualizar su estado  */
+/* (Consumido, Expirado, En Validación) moviéndolo al histórico cuando aplique*/
+/******************************************************************************/
+/*                               MODIFICACIONES                               */
+/* FECHA        AUTOR                     TAREA             RAZÓN             */
+/* 2025.08.21   Joel Lozano TechnoFocus   interfaz bus      Emisión Inicial.  */
+/******************************************************************************/
 
 IF EXISTS (SELECT 1
              FROM sysobjects
@@ -32,7 +32,7 @@ GO
 
 CREATE PROCEDURE sp_re_valida_cupon
     @i_cupon        VARCHAR(30),         -- Código del cupón
-    @i_valor        MONEY,               -- Monto esperado
+    --@i_valor        MONEY,               -- Monto esperado
     @o_cliente      INT          OUTPUT, -- Cliente asociado
     @o_cta_banco    VARCHAR(20)  OUTPUT, -- Cuenta bancaria
     @o_tipo_cta     CHAR(3)      OUTPUT, -- Tipo de cuenta
@@ -50,16 +50,16 @@ BEGIN
     DECLARE @w_estado    CHAR(1),
             @w_hora_proc smallint,
             @w_id        INT
-            
+
     set @o_num_error    = 0
 
     -------------------------------------------------------------------------
     -- 1. Validar existencia del cupón
     -------------------------------------------------------------------------
-    IF NOT EXISTS (SELECT 1 
-                     FROM re_retiro_efectivo 
+    IF NOT EXISTS (SELECT 1
+                     FROM re_retiro_efectivo
                     WHERE re_cupon = @i_cupon)
-    BEGIN  
+    BEGIN
         SELECT @o_estado     = 'E',
                @o_num_error  = 100,
                @o_desc_error = 'CUPON NO EXISTE'
@@ -169,7 +169,7 @@ BEGIN
         end
 
     end
- 
+
 
     -------------------------------------------------------------------------
     -- 7. Éxito

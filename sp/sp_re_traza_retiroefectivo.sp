@@ -25,9 +25,8 @@ create proc sp_re_traza_retiroefectivo
     , @i_cta_banco      varchar(30)
     , @i_moneda         smallint
     , @i_monto          money
-    , @i_fecha_proc     datetime
-    , @i_fecha_expira   datetime     = null
-    , @i_hora_ult_proc  date
+    , @i_fecha_proc     date
+    , @i_fecha_expira   datetime
     , @i_estado         char(1)
     , @i_usuario        login
     , @i_terminal       varchar(30)  = null
@@ -38,27 +37,37 @@ create proc sp_re_traza_retiroefectivo
     , @o_msg_error      varchar(255) out
 )
 as
- 
+
     declare @w_error     int,
             @w_nombre_sp varchar(50),
-            @w_intentos  smallint
-
+            @w_intentos  smallint,
+            @w_ahora     datetime
     set @w_error    = 0
     set @w_intentos = 0
     set @w_nombre_sp = 'sp_re_traza_retiroefectivo'
- 
+    set @w_ahora     = getdate()
 
   ----------------------------------------------------------------------
     -- Paso 1: Verificar si el cupón ya existe en re_retiro_efectivo
     ----------------------------------------------------------------------
     select @w_intentos = isnull(re_intentos,0) + 1
     from   re_retiro_efectivo
-    where  re_cupon = @i_cupon
+    where  re_cupon =  @i_cupon
+    and    re_estado = @i_estado
 
     if @@rowcount = 0
     begin
+        set @w_intentos = 1
+    end
+
+    if not exists (select 1
+                 from re_retiro_efectivo
+                where re_cupon = @i_cupon)
+    begin
+
+          set @w_intentos = 1
         -- No existe → insertar nuevo
-        insert into re_retiro_efectivo 
+        insert into re_retiro_efectivo
         (
               re_cupon,       re_cliente,    re_accion,     re_tipo_cta,    re_cta_banco
             , re_moneda,      re_monto,      re_fecha_proc, re_fecha_expira, re_hora_ult_proc
@@ -68,7 +77,7 @@ as
         values
         (
               @i_cupon,       @i_cliente,    @i_accion,     @i_tipo_cta,    @i_cta_banco
-            , @i_moneda,      @i_monto,      @i_fecha_proc, @i_fecha_expira, @i_hora_ult_proc
+            , @i_moneda,      @i_monto,      @i_fecha_proc, @i_fecha_expira, @w_ahora
             , @i_estado,      @i_usuario,    @i_terminal,   @i_oficina,     @i_resultado
             , @i_num_reserva, @i_detalle,    1
         )
@@ -78,7 +87,7 @@ as
             set @w_error = 208111
             goto ERROR_HANDLER
         end
-        set @w_intentos = 1
+
     end
     else
     begin
@@ -89,7 +98,7 @@ as
                re_resultado   = @i_resultado,
                re_fecha_proc  = @i_fecha_proc,
               -- re_fecha_expira= @i_fecha_expira,
-               re_hora_ult_proc = @i_hora_ult_proc,
+               re_hora_ult_proc = @w_ahora,
                re_usuario     = @i_usuario,
                re_terminal    = @i_terminal,
                re_detalle     = @i_detalle,
@@ -103,11 +112,10 @@ as
         end
     end
 
-
     ----------------------------------------------------------------------
     -- Paso 2: Insertar en la tabla histórica
     ----------------------------------------------------------------------
-    
+
     insert into cob_bvirtual_his..re_his_retiro_efectivo
     (
           hr_cupon,       hr_cliente,    hr_accion,     hr_tipo_cta,    hr_cta_banco
@@ -118,7 +126,7 @@ as
     values
     (
           @i_cupon,       @i_cliente,    @i_accion,     @i_tipo_cta,    @i_cta_banco
-        , @i_moneda,      @i_monto,      @i_fecha_proc, @i_fecha_expira,@i_hora_ult_proc
+        , @i_moneda,      @i_monto,      @i_fecha_proc, @i_fecha_expira,@w_ahora
         , @i_estado,      @i_usuario,    @i_terminal,   @i_oficina,     @i_resultado
         , @i_num_reserva, @i_detalle,    @w_intentos
     )
@@ -130,7 +138,7 @@ as
         goto ERROR_HANDLER
     end
 
-   ----------------------------------------------------------------------
+    ----------------------------------------------------------------------
     -- Éxito
     ----------------------------------------------------------------------
     set @o_num_error = 0
@@ -143,13 +151,13 @@ as
     ----------------------------------------------------------------------
     ERROR_HANDLER:
         set @o_num_error = @w_error
-        set @o_msg_error = @w_nombre_sp + ' Error al insertar. Código: ' 
+        set @o_msg_error = @w_nombre_sp + ' Error al insertar. Código: '
                            + convert(varchar, @w_error)
         return 1
- 
 
-    
- 
+
+
+
 go
 if object_id('dbo.sp_re_traza_retiroefectivo') is not null
     print '<<< CREATED PROCEDURE dbo.sp_re_traza_retiroefectivo >>>'

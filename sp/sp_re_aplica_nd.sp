@@ -5,7 +5,7 @@ GO
 -- Procedimiento: sp_re_aplica_nd
 -- Base:         cob_bvirtual
 -- Propósito:    Aplicar la Nota de Débito (ND) a la cuenta que generó el cupón.
--- NOTA: El control de transacción (BEGIN/COMMIT/ROLLBACK) 
+-- NOTA: El control de transacción (BEGIN/COMMIT/ROLLBACK)
 --       debe manejarse en el SP padre.
 -- ===============================================================
 
@@ -36,7 +36,7 @@ CREATE PROCEDURE sp_re_aplica_nd
   , @i_moneda_iso    CHAR(3)
   , @i_moneda_tran   SMALLINT
   , @i_producto_deb  CHAR(3)
-  , @i_num_reserva   INT 
+  , @i_num_reserva   INT
   , @i_reverso       CHAR(1) = 'N' -- S/N
   , @i_fecha_expira  DATETIME
     -- Parámetros de salida
@@ -94,12 +94,12 @@ BEGIN
     -- Inicialización
     ----------------------------------------------------------------------
     SET @w_servicio          = 'RESTD'  -- Servicio de Retiro sin Tarjeta
-    set @w_detalle_resultado = 'APLICACION DE ND CUPON DE LA CUENTA: ' + @i_cuenta
-    set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO DE CUENTA DE AHORRO DESDE ATM'
+    set @w_detalle_resultado = 'APLICACION DE ND - "RETIRO DE EFECTIVO SIN TD" DE LA CUENTA: ' + @i_cuenta
+    set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO - "RETIRO DE EFECTIVO SIN TD"'
     set @w_resultado         = 'E'
     set @w_nombre_sp         = 'sp_re_libera_fondos'
     set @w_accion_traza      = 'APL'   -- nota de debito aplicada
-    set @w_estado            = 'U'  --G=Pendiente, V=Validando,U=usado X=Expirado, E=Error 
+    set @w_estado            = 'U'  --G=Pendiente, V=Validando,U=usado X=Expirado, E=Error
     SET @o_num_error         = 0
     set @w_valor_comision    = 0
     set @w_return            = 0
@@ -114,7 +114,6 @@ BEGIN
     select @w_fecha_proceso = convert(varchar(10), fp_fecha, 101)
       from cobis..ba_fecha_proceso
 
-print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
     ----------------------------------------------------------------------
     -- Determinación de tipo de transacción (Débito)
     ----------------------------------------------------------------------
@@ -135,7 +134,6 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
         RETURN @o_num_error
     END
 
-   print 'w_tran_deb %1! - @w_causa_deb %2!  ', @w_tran_deb , @w_causa_deb
     ----------------------------------------------------------------------
     -- Obtención de secuencial
     ----------------------------------------------------------------------
@@ -155,7 +153,6 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
                         ELSE 'cob_ahorros..sp_ahndc_automatica'
                     END
 
-    print 'ejecuta @w_rpc %1! ', @w_rpc
     ----------------------------------------------------------------------
     -- Ejecución de la ND (Nota de Débito)
     ----------------------------------------------------------------------
@@ -188,27 +185,26 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
         RETURN @o_num_error
     END
 
-    print 'inrgresa de  %1! ', @w_rpc
     ----------------------------------------------------------------------
     -- Validación de cuenta según producto (Ahorros o Corriente)
     ----------------------------------------------------------------------
     IF @i_producto_deb = 'AHO'
     BEGIN
         SELECT @w_pro_bancario     = ah_prod_banc,
-               @w_tipo_def        = ah_tipo_def, 
-               @w_disponible      = ah_disponible,            
-               @w_rol_ente        = ah_rol_ente, 
+               @w_tipo_def        = ah_tipo_def,
+               @w_disponible      = ah_disponible,
+               @w_rol_ente        = ah_rol_ente,
                @w_producto        = ah_producto,
                @w_tipocta         = ah_tipocta,
                @w_categoria       = ah_categoria,
-               @w_promedio1       = ah_promedio1, 
+               @w_promedio1       = ah_promedio1,
                @w_default         = ah_default,
-               @w_prom_disp       = ah_prom_disponible, 
+               @w_prom_disp       = ah_prom_disponible,
                @w_oficina         = ah_oficina,
-               @w_personalizada   = ah_personalizada, 
+               @w_personalizada   = ah_personalizada,
                @w_filial          = ah_filial
-          FROM cob_ahorros..ah_cuenta 
-         WHERE ah_cta_banco = @i_cuenta 
+          FROM cob_ahorros..ah_cuenta
+         WHERE ah_cta_banco = @i_cuenta
            AND ah_moneda    = @i_moneda_tran
 
         IF @@ROWCOUNT  = 0
@@ -220,6 +216,7 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
     END
     ELSE IF @i_producto_deb = 'CTE'
     BEGIN
+    print 'cte1'
         SELECT @w_categoria       = cc_categoria,
                @w_tipocta         = cc_tipocta,
                @w_rol_ente        = cc_rol_ente,
@@ -237,7 +234,6 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
           FROM cob_cuentas..cc_ctacte
          WHERE cc_cta_banco = @i_cuenta
            AND cc_moneda    = @i_moneda_tran
-           AND cc_estado   NOT IN ('C', 'G')
 
         IF @@ROWCOUNT = 0
         BEGIN
@@ -253,27 +249,27 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
     ----------------------------------------------------------------------
     EXEC @w_return = cob_remesas..sp_genera_costos
          @t_from        = 'sp_re_aplica_nd',
-         @i_categoria   = @w_categoria, 
+         @i_categoria   = @w_categoria,
          @i_tipo_ente   = @w_tipocta,
-         @i_rol_ente    = @w_rol_ente, 
-         @i_tipo_def    = @w_tipo_def, 
-         @i_prod_banc   = @w_pro_bancario, 
+         @i_rol_ente    = @w_rol_ente,
+         @i_tipo_def    = @w_tipo_def,
+         @i_prod_banc   = @w_pro_bancario,
          @i_producto    = @w_producto,
-         @i_moneda      = @i_moneda_tran, 
-         @i_tipo        = 'R', 
-         @i_codigo      = @w_default, 
+         @i_moneda      = @i_moneda_tran,
+         @i_tipo        = 'R',
+         @i_codigo      = @w_default,
          @i_servicio    = @w_servicio,  -- Ajustar según reglas del negocio
          @i_rubro       = 'CRET',   -- Comisión (definir en catálogo)
-         @i_disponible  = @w_disponible, 
-         @i_prom_disp   = @w_prom_disp, 
-         @i_promedio    = @w_promedio1, 
-         @i_personaliza = @w_personalizada, 
-         @i_fecha       = @s_date,  
-         @i_filial      = @w_filial, 
-         @i_oficina     = @w_oficina, 
+         @i_disponible  = @w_disponible,
+         @i_prom_disp   = @w_prom_disp,
+         @i_promedio    = @w_promedio1,
+         @i_personaliza = @w_personalizada,
+         @i_fecha       = @s_date,
+         @i_filial      = @w_filial,
+         @i_oficina     = @w_oficina,
          @o_valor_total = @w_valor_comision OUT
 
-    IF @w_return != 0 
+    IF @w_return != 0
     BEGIN
         SET @o_num_error = @w_return
         SET @o_desc_error = 'Error en sp_genera_costos'
@@ -288,9 +284,9 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
     IF @w_valor_comision > 0
     BEGIN
         SELECT @w_causa_nd = pa_char
-          FROM cobis..cl_parametro 
-         WHERE pa_nemonico =  @w_servicio 
-           AND pa_producto = @i_producto_deb   
+          FROM cobis..cl_parametro
+         WHERE pa_nemonico =  @w_servicio
+           AND pa_producto = @i_producto_deb
 
         IF @@ROWCOUNT = 0
         BEGIN
@@ -328,10 +324,10 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
             SET @o_desc_error = 'Error al aplicar comisión de retiro'
             RETURN @o_num_error
         END
-    END 
+    END
 */
 
- 
+
     ----------------------------------------------------------------------
     -- Registrar traza del retiro
     ----------------------------------------------------------------------
@@ -345,7 +341,6 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
     , @i_moneda       = @i_moneda_tran
     , @i_monto        = @i_valor_debitar
     , @i_fecha_expira = @i_fecha_expira
-    , @i_hora_ult_proc= @w_ahora
     , @i_estado       = @w_estado   --P=Pendiente, C=Consumido, X=Expirado
     , @i_fecha_proc   = @w_fecha_proceso
     , @i_usuario      = @s_user
@@ -363,7 +358,24 @@ print 'llega a sp_re_aplica_nd @i_cuenta %1! ', @i_cuenta
         return 1
     end
 
+print 'listo para borrar w_estado %1!  @w_resultado %2!',@w_estado, @w_resultado
+    ----------------------------------------------------------------------
+    -- Si liberación exitosa, eliminar el registro vivo
+    ----------------------------------------------------------------------
+    if @w_estado in ('U','L') and @w_resultado = 'E'
+    begin
+print '@i_cupon %1!, @i_num_reserva %2!',@i_cupon,@i_num_reserva
+        delete from re_retiro_efectivo
+         where re_cupon       = @i_cupon
+           and re_num_reserva = @i_num_reserva
 
+        if @@error <> 0
+        begin
+            set @o_num_error = 160011
+            set @o_desc_error = 'Error al eliminar registro de re_retiro_efectivo'
+            return 1
+        end
+    end
     ----------------------------------------------------------------------
     -- Éxito
     ----------------------------------------------------------------------

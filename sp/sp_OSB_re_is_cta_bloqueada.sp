@@ -1,5 +1,27 @@
 use cob_bvirtual
 go
+/******************************************************************************/
+/* Archivo:              sp_OSB_re_is_cta_bloqueada                           */
+/* Stored procedure:     sp_OSB_re_is_cta_bloqueada                           */
+/* Base de datos:        cob_bvirtual                                         */
+/* Producto:             Banca Virtual                                        */
+/* Diseñado por:         Joel Lozano                                          */
+/* Fecha de escritura:   21/Agosto/2025                                       */
+/******************************************************************************/
+/*                                  IMPORTANTE                                */
+/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */
+/* de Grupo Financiero Ficohsa.                                               */
+/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */
+/* sin la previa autorización.                                                */
+/******************************************************************************/
+/*                                  PROPÓSITO                                 */
+/* Orquestar el proceso de  liberacion de fondos reservados  en las cuentas   */
+/* de ahorro o corriente  mediante cupón.                                     */
+/******************************************************************************/
+/*                               MODIFICACIONES                               */
+/* FECHA        AUTOR                     TAREA             RAZÓN             */
+/* 2025.08.21   Joel Lozano TechnoFocus   sp consulta cta   Emisión Inicial.  */
+/******************************************************************************/
 
 -- ===============================================================
 -- Procedimiento: sp_OSB_re_is_cta_bloqueada
@@ -21,7 +43,7 @@ CREATE PROCEDURE dbo.sp_OSB_re_is_cta_bloqueada
     , @o_desc_error            varchar(255) output -- Mensaje detalle
 )
 AS
- 
+
 
 declare
     @w_sp_name      varchar(30),
@@ -34,13 +56,13 @@ declare
     @w_idcuenta        int ,
     @w_num_transaccion  smallint,
     @w_cod_error   int,
-    @w_msg_error   varchar(255)    
+    @w_msg_error   varchar(255)
 
 
   set  @w_sp_name   = 'sp_OSB_re_is_cta_bloqueada'
 	SET @o_num_error  = 0
 	SET @o_desc_error = 'SIN BLOQUEO'
-		
+
 
 
      --------------------------------------------------------------------------
@@ -52,10 +74,10 @@ declare
     , @i_moneda_iso     = 'NIO'
     , @o_cliente        = @w_codigo_cliente output
     , @o_tipo_cuenta    = @w_tipo_cuenta    output
-    , @o_moneda         = @w_num_transaccion OUTPUT 
+    , @o_moneda         = @w_num_transaccion OUTPUT
     , @o_idcuenta       = @w_idcuenta   output
     , @o_msg_error      = @w_msg_error   output
-    , @o_num_error      = @w_cod_error   output 
+    , @o_num_error      = @w_cod_error   output
     IF @w_return != 0
     BEGIN
         SET @o_num_error  = @w_cod_error
@@ -66,7 +88,7 @@ declare
 
 if @w_tipo_cuenta = 'CTE'
 begin
-    -- ===== CUENTA CORRIENTE ===== 
+    -- ===== CUENTA CORRIENTE =====
     select @w_tipo_bloqueo = cb_tipo_bloqueo
       from cob_cuentas..cc_ctabloqueada
      where cb_cuenta = @w_id_cuenta
@@ -99,7 +121,7 @@ begin
       from cob_ahorros..ah_ctabloqueada
      where cb_cuenta = @w_id_cuenta
        and cb_estado = 'V'
-       and cb_tipo_bloqueo in 
+       and cb_tipo_bloqueo in
        (
         '2',  --	CONTRA RETIRO
         '3'    -- CONTRA DEPOSITO Y RETIRO
@@ -117,12 +139,29 @@ begin
         SET @o_num_error  = 201009
         SET @o_desc_error = @w_mensaje
         RETURN 1
-		
+
     end
 end
 
 return 0
 go
+
+-------------------------------------------------------------------------------
+-- PERMISOS DE EJECUCIÓN
+-------------------------------------------------------------------------------
+IF (ROLE_ID('Service_Rol_Dev') > 0)
+    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol_Dev
+
+IF (ROLE_ID('Service_Rol_QA') > 0)
+    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol_QA
+
+IF (ROLE_ID('Service_Rol') > 0)
+    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol
+GO
+
+EXEC sp_procxmode 'dbo.sp_OSB_re_despignorar', 'anymode'
+GO
+
 
 if object_id('dbo.sp_OSB_re_is_cta_bloqueada') is not null
     print '<<< CREATED PROCEDURE dbo.sp_OSB_re_is_cta_bloqueada >>>'

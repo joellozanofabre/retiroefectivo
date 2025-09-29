@@ -1,0 +1,39 @@
+#include  "definic.sqr"
+
+#define   ANCHO_PAG                220  ! Ancho de la página a imprimir
+
+Begin-Setup
+use cob_bvirtual
+printer-init {COD_IMP_COND}
+page-size {LARGO_PAG} {ANCHO_PAG}
+End-Setup
+
+#include "log.sqr"
+
+Begin-Report
+do Inicializar_Programa
+do ParamN (1,#i_filial,'cobis..cl_filial','fi_filial = ','No existe la filial')
+let #secuencial = 0
+do Main
+do Finalizar_Programa
+End-Report
+
+
+Begin-Procedure Main
+do Procesar
+End-Procedure
+
+
+Begin-Procedure Procesar
+  execute on-error=Error cob_bvirtual..sp_re_expira_cupones
+
+  show 'Proceso de expiración de cupones ejecutado exitosamente.'
+End-Procedure
+
+
+Begin-Procedure Error
+!* Imprime en caso que falle alguna operación *!
+  show 'Error al ejecutar sp_re_expira_cupones'
+  show $sql-error
+  do Abortar
+End-Procedure

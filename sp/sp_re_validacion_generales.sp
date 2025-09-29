@@ -48,12 +48,13 @@ DECLARE
     END
 
     ----------------------------------------------------------------------
-    -- Validar que el cupon vigente no se repita 
+    -- Validar que el cupon vigente no se repita. No puede haber otro cupon
+    -- igual pendiente de retiro, o pendiente de aplicación,
     ----------------------------------------------------------------------
-    IF NOT EXISTS (SELECT 1 
-                     FROM re_retiro_efectivo 
+    IF NOT EXISTS (SELECT 1
+                     FROM re_retiro_efectivo
                     WHERE re_cupon = @i_cupon)
-    BEGIN  
+    BEGIN
         SELECT @o_estado     = 'E',
                @o_num_error  = 100,
                @o_desc_error = 'CUPON YA EXISTE'
@@ -68,24 +69,24 @@ DECLARE
     begin
         select @o_num_error = 18479,
                @o_msg_error = 'ERROR - MONEDA NO INGRESADA'
-        return @o_num_error 
+        return @o_num_error
     end
 
     if len(@i_moneda_iso) <> 3
     begin
         select @o_num_error = 121035,
                @o_msg_error = 'NO EXISTEN DATOS PARA LA MONEDA ESPECIFICADA'
-        return @o_num_error 
+        return @o_num_error
     end
 
     if @i_moneda_iso not in ('USD','NIO')
     begin
         select @o_num_error = 1880033,
                @o_msg_error = 'LA MONEDA EURO NO ESTA PERMITIDA PARA PIGNORACION'
-        return @o_num_error 
-    end   
+        return @o_num_error
+    end
 
-    
+
     SELECT @o_moneda = mo_moneda
     FROM cobis..cl_moneda
     WHERE mo_simbolo = @i_moneda_iso
@@ -181,7 +182,7 @@ DECLARE
     ----------------------------------------------------------------------
     set  @o_num_error = 0
     RETURN @o_num_error
- 
+
 GO
 
 IF OBJECT_ID('dbo.sp_re_validacion_generales') IS NOT NULL

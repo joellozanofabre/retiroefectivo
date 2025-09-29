@@ -1,5 +1,28 @@
 use cob_bvirtual
 go
+/******************************************************************************/
+/* Archivo:              sp_re_libera_fondos.sp                               */
+/* Stored procedure:     sp_re_libera_fondos                                  */
+/* Base de datos:        cob_bvirtual                                         */
+/* Producto:             Banca Virtual                                        */
+/* Diseñado por:         Joel Lozano                                          */
+/* Fecha de escritura:   21/Agosto/2025                                       */
+/******************************************************************************/
+/*                                  IMPORTANTE                                */
+/* Este programa es Propiedad de Banco Ficohsa Nicaragua, Miembro             */
+/* de Grupo Financiero Ficohsa.                                               */
+/* Se prohíbe su uso no autorizado, así como cualquier alteración o agregado  */
+/* sin la previa autorización.                                                */
+/******************************************************************************/
+/*                                  PROPÓSITO                                 */
+/* Orquestar el proceso de  liberacion de fondos reservados  en las cuentas   */
+/* de ahorro o corriente  mediante cupón.                                     */
+/******************************************************************************/
+/*                               MODIFICACIONES                               */
+/* FECHA        AUTOR                     TAREA             RAZÓN             */
+/* 2025.08.21   Joel Lozano TechnoFocus   sp liberardor    Emisión Inicial.  */
+/******************************************************************************/
+
 
 if exists (select 1
              from sysobjects
@@ -53,12 +76,13 @@ create procedure sp_re_libera_fondos
     , @i_tarjeta        cuenta      = '000000000000000'
     , @i_tipo_cta       char(3)     -- 'AHO' o 'CTE'
     , @i_fecha_expira   datetime    = null
+    , @i_descripcion    varchar(80) = null
 
     ----------------------------------------------------------------------
     -- Parámetros de salida
     ----------------------------------------------------------------------
-    , @o_cod_error      int          output
-    , @o_msg_error      varchar(255) output
+    , @o_num_error      int          output
+    , @o_desc_error      varchar(255) output
 )
 as
 begin
@@ -75,7 +99,6 @@ begin
         , @w_resultado          char(1)
         , @w_accion_traza       char(3)
         , @w_pro_bancario       smallint
-        , @w_ahora              datetime
         , @w_fecha_proceso      datetime
         , @w_detalle_resultado  varchar(100)
         , @w_msg_error          varchar(100)
@@ -91,10 +114,9 @@ begin
     -- Inicialización de variables
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
-    set @w_detalle_resultado = 'LIBERACION DE CUPON' + @i_cupon
-    set @w_ahora             = getdate()
+    set @w_detalle_resultado = 'LIBERACION DE CUPON ' + @i_cupon
     set @w_nombre_sp         = 'sp_re_libera_fondos'
-    set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO DE CUENTA DESDE ATM'
+    set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO - RETIRO DE EFECTIVO SIN TD'
     set @w_accion_traza      = 'DPG'   -- Despignorado
     set @w_estado            = 'L'     -- L=liberado, E=error, U=usado, etc.
     set @w_valor_comision    = 0
@@ -102,13 +124,15 @@ begin
     set @w_return            = 0
     set @w_num_reserva       = @i_sec
 
+    if @i_descripcion is not null
+    set @w_descripcion = @i_descripcion
     ----------------------------------------------------------------------
     -- Determinar producto bancario según tipo de cuenta
     ----------------------------------------------------------------------
     if @i_tipo_cta = 'AHO'
     begin
         set @w_rpc = 'cob_ahorros..sp_reserva_fondos_ah'
-
+        set @t_trn =  318
         select @w_idcta = ah_cuenta
           from cob_ahorros..ah_cuenta
          where ah_cta_banco = @i_cuenta
@@ -121,15 +145,15 @@ begin
                       and hr_tipo        = 'P'
                       and hr_valor       = @i_valor_pignorar)
         begin
-            set @o_cod_error = 160009
-            set @o_msg_error = 'CUPON YA HA SIDO LIBERADO'
-            return 1
+            set @o_num_error = 160009
+            set @o_desc_error = 'CUPON YA HA SIDO LIBERADO'
+            return @o_num_error
         end
     end
     else if @i_tipo_cta = 'CTE'
     begin
         set @w_rpc = 'cob_cuentas..sp_reserva_fondos'
-
+        set @t_trn =  2706
         select @w_idcta = cc_ctacte
           from cob_cuentas..cc_ctacte
          where cc_cta_banco = @i_cuenta
@@ -142,16 +166,16 @@ begin
                       and hr_tipo        = 'P'
                       and hr_valor       = @i_valor_pignorar)
         begin
-            set @o_cod_error = 160009
-            set @o_msg_error = 'CUPON YA HA SIDO LIBERADO'
-            return 1
+            set @o_num_error = 160009
+            set @o_desc_error = 'CUPON YA HA SIDO LIBERADO'
+            return @o_num_error
         end
     end
     else
     begin
-        set @o_cod_error = 160010
-        set @o_msg_error = 'Tipo de cuenta no válido'
-        return 1
+        set @o_num_error = 160010
+        set @o_desc_error = 'Tipo de cuenta no válido'
+        return @o_num_error
     end
 
     ----------------------------------------------------------------------
@@ -193,30 +217,21 @@ begin
          @i_tarjeta    = @i_tarjeta,
          @i_motivo     = @i_motivo,
          @i_sec        = @i_sec,
-         @i_reserva    = @i_reserva,
+         @i_reserva    =  @i_sec,--  @i_reserva,
+         @i_cheque     = 0,
          @o_oficina    = @w_oficina out,
-         @o_cod_error  = @w_cod_error out,
+         @o_num_error  = @w_cod_error out,
          @o_reserva    = @w_num_reserva out,
          @o_saldo_para_girar_antes = @w_saldoagirar_antes out
 
     if @w_return <> 0
     begin
-        set @o_cod_error = @w_return
-        set @o_msg_error = @w_rpc + ' - Error al realizar el débito en la cuenta: ' + @i_cuenta
+        set @o_num_error = @w_return
+        set @o_desc_error = @w_rpc + ' - Error al realizar el débito en la cuenta: ' + @i_cuenta
         set @w_resultado = 'F'
-        return @o_cod_error
+        return @o_num_error
     end
 
-    ----------------------------------------------------------------------
-    -- Validar si hubo error en ejecución
-    ----------------------------------------------------------------------
-    if @o_cod_error <> 0
-    begin
-        select @o_msg_error = mensaje
-          from cobis..cl_errores
-         where numero = @o_cod_error
-        set @w_detalle_resultado = @o_msg_error
-    end
 
     ----------------------------------------------------------------------
     -- Registrar traza del retiro
@@ -230,7 +245,6 @@ begin
          @i_cta_banco     = @i_cuenta,
          @i_moneda        = @i_moneda,
          @i_monto         = @i_valor_pignorar,
-         @i_hora_ult_proc = @w_ahora,
          @i_fecha_expira  = @i_fecha_expira,
          @i_estado        = @w_estado,
          @i_fecha_proc    = @w_fecha_proceso,
@@ -238,33 +252,28 @@ begin
          @i_terminal      = @s_term,
          @i_oficina       = @s_ofi,
          @i_resultado     = @w_resultado,
-         @i_detalle       = @w_detalle_resultado,
+         @i_detalle       = @w_descripcion,
          @o_num_error     = @w_cod_error output,
          @o_msg_error     = @w_msg_error output
 
     if @w_return <> 0
     begin
-        set @o_cod_error = @w_return
-        set @o_msg_error = @w_msg_error
-        return 1
+        set @o_num_error = @w_return
+        set @o_desc_error = @w_msg_error
+        return @w_return
     end
 
-    ----------------------------------------------------------------------
-    -- Si liberación exitosa, eliminar el registro vivo
-    ----------------------------------------------------------------------
-    if @w_estado in ('U','L') and @w_resultado = 'E'
-    begin
-        delete from re_retiro_efectivo
-         where re_cupon       = @i_cupon
-           and re_num_reserva = @i_sec
+    print 'El cupón está Liberado, se procede a eliminar de tabla vigente re_retiro_efectivo'
+    DELETE FROM re_retiro_efectivo
+    WHERE re_cupon = @i_cupon
 
-        if @@error <> 0
-        begin
-            set @o_cod_error = 160011
-            set @o_msg_error = 'Error al eliminar registro de re_retiro_efectivo'
-            return 1
-        end
-    end
+    IF @@error <> 0
+    BEGIN
+        SET @o_num_error  = 600
+        SET @o_desc_error = 'Error al eliminar cupón liberado en tabla re_retiro_efectivo'
+        RETURN 1
+    END
+
 
     return @w_return
 end

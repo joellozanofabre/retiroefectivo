@@ -69,25 +69,23 @@ begin
         , @w_resultado          char(1)
         , @w_pro_bancario       smallint
         , @w_valor_comision     money
-        , @w_ahora              datetime
         , @w_fecha_proceso      datetime
         , @w_msg_error          varchar(100)
+		    , @w_cod_error          int
         , @w_nombre_sp          varchar(50)
         , @w_descripcion        VARCHAR(100)
         , @w_accion_traza       char(3)
         , @w_num_reserva        int
         , @w_fecha_expira       datetime
-		    , @w_cod_error          int
-        
+
     ----------------------------------------------------------------------
     -- Inicialización
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
     set @w_valor_comision    = 0
-    set @w_ahora             = getdate()
     set @w_nombre_sp         = 'sp_re_pignora_cta_ahorro'
     set @w_ah_cuenta         = 0
-    set @w_descripcion       = 'CUPON POR RETIRO EFECTIVO EN ATM ' + @i_cupon
+    set @w_descripcion       = 'VALOR RESERVADO - RETIRO DE EFECTIVO SIN TD ' + @i_cupon
     set @w_return            = 0
     set @w_accion_traza      = ''
 	  set @w_num_reserva       = 0
@@ -101,19 +99,19 @@ begin
       from ah_cuenta
      where ah_cta_banco = @i_cuenta
 
- 
+
     select @w_fecha_proceso = convert(varchar(10),fp_fecha,101)
       from cobis..ba_fecha_proceso
- 
- 
+
+
     ----------------------------------------------------------------------
     -- 1 cupon vigente a la vez
-    ----------------------------------------------------------------------    
-  
+    ----------------------------------------------------------------------
+
     set @w_accion_traza = 'PIG'   --pignorado
     set @w_estado       = 'G'     --Generado
     if exists(select 1  from cob_ahorros..ah_cuenta_reservada
-              where cr_cuenta = @w_ah_cuenta   and cr_estado = 'R' and cr_tipo='P')    
+              where cr_cuenta = @w_ah_cuenta   and cr_estado = 'R' and cr_tipo='P')
     begin
 
         select @o_num_error = 160004
@@ -121,7 +119,7 @@ begin
 
         return 1
     end
-  
+
 
     --begin transaction
     ----------------------------------------------------------------------
@@ -151,7 +149,7 @@ begin
        , @i_mon        = @i_moneda
        , @i_accion     = @i_accion
        , @i_tipo       = 'P'  --nuevo pignoracion
-       , @i_ofi_solic  = @s_ofi 
+       , @i_ofi_solic  = @s_ofi
        , @i_sec        = @i_sec
        , @i_val_reservar = @i_val_reservar
        , @i_solicita   = @w_descripcion
@@ -165,7 +163,7 @@ begin
         set @w_resultado = 'F'
         set @o_num_error = @w_return
     end
-    
+
     ----------------------------------------------------------------------
     -- Registrar la traza en re_retiro_efectivo
     ----------------------------------------------------------------------
@@ -174,21 +172,20 @@ begin
         select @o_msg_error = mensaje
           from cobis..cl_errores
          where numero = @o_num_error
-        
-    end 
 
-    set  @w_fecha_expira = dateadd(hour, 24,  @w_ahora)
+    end
+
+    set  @w_fecha_expira = dateadd(hour, 24,  getdate())
 
     exec @w_return =  cob_bvirtual..sp_re_traza_retiroefectivo
       @i_cupon        = @i_cupon
-    , @i_num_reserva  = @w_num_reserva  
+    , @i_num_reserva  = @w_num_reserva
     , @i_cliente      = @i_cliente
     , @i_accion       = @w_accion_traza
     , @i_tipo_cta     = 'AHO'
     , @i_cta_banco    = @i_cuenta
     , @i_moneda       = @i_moneda
     , @i_monto        = @i_valor_pignorar
-    , @i_hora_ult_proc= @w_ahora
     , @i_fecha_expira = @w_fecha_expira
     , @i_estado       = @w_estado   --P=Pendiente, C=Consumido, X=Expirado
     , @i_fecha_proc   = @w_fecha_proceso
@@ -207,7 +204,7 @@ begin
         return 1
     end
 
- 
+
 
 
     return @w_return
