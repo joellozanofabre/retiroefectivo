@@ -116,7 +116,8 @@ begin
     set @w_accion_traza = 'PIG'   --pignorado
     set @w_estado       = 'G'     --Generado
     if exists(select 1  from cob_cuentas..cc_cuenta_reservada
-                where cr_ctacte = @w_idcta      and cr_estado = 'R'
+                where cr_ctacte = @w_idcta
+                and cr_estado = 'R'
                 and cr_tipo='P')
     begin
         select @o_num_error = 160004
@@ -181,6 +182,7 @@ begin
         if @w_num_reserva is null
 		   set @w_num_reserva = 0
 
+        set @w_descripcion = 'ERROR EN RESERVA DE FONDOS CTACTE /' + convert(varchar,@w_return)
         set @w_resultado = 'F'
         set @o_num_error = @w_return
     end
@@ -223,8 +225,7 @@ begin
     begin
         set @o_num_error = @w_return
         set @o_msg_error = @w_msg_error
-
-        return 1
+        return @o_num_error
     end
 
 
@@ -232,6 +233,7 @@ begin
     return @w_return
 end
 go
+
 
 
 

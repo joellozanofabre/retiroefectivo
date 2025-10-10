@@ -36,7 +36,6 @@ create procedure sp_OSB_re_despignorar
     , @i_AMOUNT                money       -- Monto a retirar
     , @i_CURRENCY              char(3)     -- Moneda
     , @i_CUPON                 varchar(80) -- Cupón generado
-    , @i_REVERSO               char(1)     = 'N'  -- Indica si la transacción es un reverso
     , @i_ONLYRELEASE           char(1)     = 'N'  -- Indica si la transacción es para liberar unicamente
    	, @o_num_error             int            out
    	, @o_desc_error            varchar(132)   out
@@ -100,8 +99,6 @@ declare
     set @w_num_reserva     = 0
     set @w_aplicanotadedebito = 'S'  -- por defecto aplica nota de debito
 
-    if  @i_REVERSO = 'S'
-       set @w_val_reservar = @i_AMOUNT
 
     --------------------------------------------------------------------------
     -- Paso 2: Validación de cupón
@@ -124,7 +121,7 @@ declare
         SELECT
               @o_num_error  = @w_cod_error
             , @o_desc_error = 'Error en sp_re_valida_cupon: ' + @w_msg_error
-        RETURN 1
+        RETURN @w_cod_error
     END
     --------------------------------------------------------------------------
     -- Paso 2.1: Si el cupón está expirado, eliminar de tabla vigente
@@ -137,14 +134,14 @@ declare
 
         IF @@error <> 0
         BEGIN
-            SET @o_num_error  = 600
-            SET @o_desc_error = 'Error al eliminar cupón expirado en tabla re_retiro_efectivo'
-            RETURN 1
+            SET @o_num_error  = 169265
+            SET @o_desc_error = 'ERROR AL ELIMINAR CUPÓN EXPIRADO EN TABLA RE_RETIRO_EFECTIVO'
+            RETURN  @o_num_error
         END
 
         -- Devolver mensaje de expiración
-        SET @o_num_error  = 101
-        SET @o_desc_error = 'Cupón expirado y eliminado de tabla viva'
+        SET @o_num_error  = 169266
+        SET @o_desc_error = 'CUPÓN EXPIRADO Y ELIMINADO DE TABLA RE_RETIRO_EFECTIVO'
 
     END
 
@@ -174,7 +171,7 @@ declare
     ----------------------------------------------------------------------
     begin tran TRANSACCION_RETIRO
         ----------------------------------------------------------------------
-        -- 1. Liberar fondos (despignorar)
+        -- 1. Obligatorio Liberar fondos (despignorar) a la reserva en la base de datos respectiva
         ----------------------------------------------------------------------
         exec @w_return = sp_re_libera_fondos
                   @s_ssn          = @w_ssn
@@ -210,9 +207,9 @@ declare
             IF @w_return != 0
             BEGIN
                 SET @o_num_error  = @w_return
-                SET @o_desc_error = 'Error en sp_re_libera_fondos: ' + @w_msg_error
+                SET @o_desc_error = 'ERROR EN SP_RE_LIBERA_FONDOS: ' + @w_msg_error
                 rollback tran TRANSACCION_RETIRO
-                RETURN 1
+                RETURN @w_return
             END
         ----------------------------------------------------------------------
         -- si no esta expirado y no es solo liberacion
@@ -243,7 +240,7 @@ declare
                 @i_moneda_tran  = @w_moneda,
                 @i_num_reserva  = @w_num_reserva,
                 @i_producto_deb = @w_tipo_cuenta,
-                @i_reverso      = @i_REVERSO,
+                @i_reverso      = 'N',
                 @i_fecha_expira = @w_fecha_expira,
                 @o_secuencial   = @w_secuencial out,
                 @o_num_error    = @w_return out,
@@ -253,17 +250,30 @@ declare
                     SET @o_num_error  = @w_return
                     SET @o_desc_error = 'Error en sp_re_aplica_nd: ' + @w_msg_error
                     rollback tran TRANSACCION_RETIRO
-                    RETURN 1
+                    RETURN @w_return
                 END
         end
 
+   -- print 'El cupón está Liberado, se procede a eliminar de tabla vigente re_retiro_efectivo.'
+    DELETE FROM re_retiro_efectivo
+    WHERE re_cupon = @i_CUPON
+
+    IF @@error <> 0
+    BEGIN
+        SET @o_num_error  = 169263
+        SET @o_desc_error = 'ERROR AL ELIMINAR CUPÓN LIBERADO EN TABLA RE_RETIRO_EFECTIVO'
+        RETURN @o_num_error
+    END
 
     ----------------------------------------------------------------------
     -- Éxito
     ----------------------------------------------------------------------
     commit tran TRANSACCION_RETIRO
     set @o_num_error = 0
-    set @o_desc_error = 'Liberación y débito exitosos'
+    if @i_ONLYRELEASE = 'S'
+        set @o_desc_error = 'LIBERACIÓN DE CUPÓN' + @i_CUPON + ' EXITOSA'
+    else
+        set @o_desc_error = 'LIBERACIÓN y DEBITO DE CUPÓN' + @i_CUPON + ' EXITOSA'
     return 0
 end
 go

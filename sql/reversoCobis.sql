@@ -10,51 +10,74 @@ GO
 -- Eliminación de errores en cl_errores
 -- ============================================================
 
--- Error 208110
-IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208110)
+SELECT * FROM cl_errores WHERE numero in ( 169257,169258,169259,169260,169261,169262)
+
+SELECT *
+FROM cobis..cl_catalogo
+WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 'cc_tipo_reserva')
+GO
+SELECT *
+FROM cobis..cl_catalogo
+WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 'ah_tipo_reserva')
+GO
+
+SELECT *
+FROM cobis..cl_catalogo
+WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 're_estados_transicion')
+GO
+
+-- Error 169257
+IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169257)
 BEGIN
-    DELETE FROM cl_errores WHERE numero = 208110
-    PRINT '208110 eliminado correctamente'
+    DELETE FROM cl_errores WHERE numero = 169257
+    PRINT '169257 eliminado correctamente'
 END
 GO
 
--- Error 208111
-IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208111)
+-- Error 169258
+IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169258)
 BEGIN
-    DELETE FROM cl_errores WHERE numero = 208111
-    PRINT '208111 eliminado correctamente'
+    DELETE FROM cl_errores WHERE numero = 169258
+    PRINT '169258 eliminado correctamente'
 END
 GO
 
--- Error 208112
-IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208112)
+-- Error 169259
+IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169259)
 BEGIN
-    DELETE FROM cl_errores WHERE numero = 208112
-    PRINT '208112 eliminado correctamente'
+    DELETE FROM cl_errores WHERE numero = 169259
+    PRINT '169259 eliminado correctamente'
 END
 GO
 
--- Error 208113
-IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208113)
+-- Error 169260
+IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169260)
 BEGIN
-    DELETE FROM cl_errores WHERE numero = 208113
-    PRINT '208113 eliminado correctamente'
+    DELETE FROM cl_errores WHERE numero = 169260
+    PRINT '169260 eliminado correctamente'
 END
 GO
 
--- Error 208114
-IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208114)
+-- Error 169261
+IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169261)
 BEGIN
-    DELETE FROM cl_errores WHERE numero = 208114
-    PRINT '208114 eliminado correctamente'
+    DELETE FROM cl_errores WHERE numero = 169261
+    PRINT '169261 eliminado correctamente'
 END
 GO
 
+-- Error 169261
+IF EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169262)
+BEGIN
+    DELETE FROM cl_errores WHERE numero = 169262
+    PRINT '169262 eliminado correctamente'
+END
+GO
 /* ============================================================
    Reverso: Eliminación en catálogos (ahorros y corrientes)
    ============================================================ */
 
-DECLARE 
+DECLARE
     @w_tabla   SMALLINT,
     @w_descrip VARCHAR(100)
 
@@ -103,3 +126,22 @@ BEGIN
     PRINT 'Parámetro MULRET eliminado correctamente'
 END
 GO
+
+
+SELECT *
+FROM cobis..cl_catalogo
+WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 'cc_tipo_reserva')
+GO
+SELECT *
+FROM cobis..cl_catalogo
+WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 'ah_tipo_reserva')
+GO
+SELECT *
+FROM cobis..cl_catalogo
+WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 're_estados_transicion')
+GO
+
+SELECT * FROM cl_errores WHERE numero in ( 169257,169258,169259,169260,169261,169262)
+go
+
+

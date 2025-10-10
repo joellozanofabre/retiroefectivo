@@ -87,6 +87,12 @@ DECLARE
     SET @w_sp_name         = 'sp_OSB_re_pignorar'
     SET @w_tipo_cuenta     = ''
 
+
+    -- Normalizar número de cuenta
+    SELECT @i_DEBIT_ACCOUNT = LTRIM(RTRIM(@i_DEBIT_ACCOUNT))
+    SELECT @i_DEBIT_ACCOUNT = cobis.dbo.cta_cobis_iban(@i_DEBIT_ACCOUNT, '1')
+
+
     --------------------------------------------------------------------------
     -- Paso 1: Validaciones previas de la pignoración
     --------------------------------------------------------------------------
@@ -94,6 +100,7 @@ DECLARE
       @i_cuenta_banco   = @i_DEBIT_ACCOUNT
     , @i_monto          = @i_AMOUNT
     , @i_moneda_iso     = @i_CURRENCY
+    , @i_cupon          = @i_CUPON
     , @o_cliente        = @w_codigo_cliente output
     , @o_tipo_cuenta    = @w_tipo_cuenta    output
     , @o_moneda         = @w_moneda OUTPUT
@@ -102,9 +109,9 @@ DECLARE
     , @o_num_error      = @w_cod_error   output
     IF @w_return != 0
     BEGIN
-        SET @o_num_error  = @w_cod_error
+        SET @o_num_error  = @w_return
         SET @o_desc_error = 'Error en sp_re_validacion_generales: ' + @w_msg_error
-        RETURN 1
+        RETURN @w_return
     END
 
 
@@ -168,7 +175,7 @@ DECLARE
         BEGIN
             SET @o_num_error  = @w_return
             SET @o_desc_error = 'Error en sp_re_pignora_cta_ahorro: ' + @w_msg_error
-            RETURN 1
+             RETURN @w_return
         END
     END
     ELSE IF @w_tipo_cuenta = 'CTE'
@@ -206,18 +213,35 @@ DECLARE
         IF @w_return != 0
         BEGIN
             SET @o_num_error  = @w_return
-            SET @o_desc_error = 'Error en sp_re_pignora_cta_corriente: ' + @w_msg_error
-            RETURN 1
+            SET @o_desc_error = 'ERROR EN SP_RE_PIGNORA_CTA_CORRIENTE: ' + @w_msg_error
+             RETURN @w_return
         END
     END
     ELSE
     BEGIN
         SET @o_num_error  = 999
-        SET @o_desc_error = 'Tipo de cuenta inválido'
+        SET @o_desc_error = 'TIPO DE CUENTA INVÁLIDO'
         RETURN @o_num_error
     END
+
+    --------------------------------------------------------------------------
+    -- Paso 4: eLIMINA DE LA TRABLA DE TRABAJO SI ES FALLO. YA SE PASO A HISTORICO
+    --------------------------------------------------------------------------
+    if exists (select 1
+                 from re_retiro_efectivo
+                where re_cupon = @i_CUPON and re_estado = 'F')
+    BEGIN
+        DELETE FROM re_retiro_efectivo   WHERE re_cupon = @i_CUPON and re_estado = 'F'
+
+        IF @@error <> 0
+        BEGIN
+            SET @o_num_error  = 169263
+            SET @o_desc_error = 'ERROR AL ELIMINAR CUPÓN LIBERADO EN TABLA RE_RETIRO_EFECTIVO'
+            RETURN @o_num_error
+        END
+    END
     ----------------------------------------------------------------------
-    '-- Éxito'
+    --'-- Éxito'
     ----------------------------------------------------------------------
     RETURN 0
 END

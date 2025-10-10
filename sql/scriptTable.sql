@@ -8,7 +8,7 @@ go
 
 
 create table re_retiro_efectivo (
-    re_id               int identity not null,      -- ID único de la traza
+    re_id               int identity    not null,   -- ID único de la traza
     re_cupon            varchar(80)     not null,   -- Código único del cupón
     re_cliente          int             not null,   -- Cliente que emite el retiro (solo naturales)
     re_accion           char(3)         not null,   -- Acción: PIGNORA, DESPIGNORA, APLICA
@@ -26,7 +26,7 @@ create table re_retiro_efectivo (
     re_resultado        char(1)         not null,   -- Resultado: E=éxito, F=falla
     re_num_reserva      int             not null,   -- Secuencial generado desde cobis
     re_intentos         int             default 0,  -- control de concurrencia
-    re_detalle          varchar(255)    null        -- Mensaje adicional
+    re_detalle          varchar(150)    null        -- Mensaje adicional
 )
 
 
@@ -66,7 +66,7 @@ create table re_his_retiro_efectivo (
     hr_resultado        char(1)         not null,   -- Resultado: E=éxito, F=falla
     hr_num_reserva      int             not null,   -- Secuancial generado desde cobis
     hr_intentos         int             default 0,  -- control de concurrencia
-    hr_detalle          varchar(255)    null       -- Mensaje adicional
+    hr_detalle          varchar(150)    null       -- Mensaje adicional
 
 )
 

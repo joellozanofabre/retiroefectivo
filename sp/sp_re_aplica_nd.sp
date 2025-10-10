@@ -64,7 +64,6 @@ BEGIN
       , @w_nombre_sp        VARCHAR(30)
       , @w_causa_nd         VARCHAR(5)
       , @w_msg_error        VARCHAR(100)
-      , @w_descripcion      VARCHAR(100)
       , @w_detalle_resultado VARCHAR(100)
       , @w_servicio         CHAR(5)
       , @w_categoria        CHAR(1)
@@ -94,8 +93,7 @@ BEGIN
     -- Inicialización
     ----------------------------------------------------------------------
     SET @w_servicio          = 'RESTD'  -- Servicio de Retiro sin Tarjeta
-    set @w_detalle_resultado = 'APLICACION DE ND - "RETIRO DE EFECTIVO SIN TD" DE LA CUENTA: ' + @i_cuenta
-    set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO - "RETIRO DE EFECTIVO SIN TD"'
+    set @w_detalle_resultado = 'EXITO - APLICACION DE ND - "RETIRO DE EFECTIVO SIN TD" DE LA CUENTA: ' + @i_cuenta
     set @w_resultado         = 'E'
     set @w_nombre_sp         = 'sp_re_libera_fondos'
     set @w_accion_traza      = 'APL'   -- nota de debito aplicada
@@ -140,7 +138,7 @@ BEGIN
     EXEC @w_ssn = ADMIN...rp_ssn
     IF @@ERROR != 0 OR @w_ssn = 0
     BEGIN
-        SET @o_num_error = 1
+        SET @o_num_error = 99
         SET @o_desc_error = 'Error al obtener secuencial rp_ssn'
         RETURN @o_num_error
     END
@@ -181,7 +179,7 @@ BEGIN
     IF @w_return <> 0 OR @@ERROR <> 0
     BEGIN
         SET @o_num_error = @w_return
-        SET @o_desc_error = @w_rpc + ' - Error al realizar el débito en la cuenta: ' + @i_cuenta
+        SET @o_desc_error = 'ERROR AL REALIZAR EL DÉBITO EN LA CUENTA: ' + @i_cuenta
         RETURN @o_num_error
     END
 
@@ -216,7 +214,6 @@ BEGIN
     END
     ELSE IF @i_producto_deb = 'CTE'
     BEGIN
-    print 'cte1'
         SELECT @w_categoria       = cc_categoria,
                @w_tipocta         = cc_tipocta,
                @w_rol_ente        = cc_rol_ente,
@@ -277,7 +274,6 @@ BEGIN
     END
 
     SET @w_valor_comision = ISNULL(@w_valor_comision, 0)
-   print 'regresa de genera costos @w_valor_comision %1! ', @w_valor_comision
     ----------------------------------------------------------------------
     -- Débito de Comisión (si aplica)
     ----------------------------------------------------------------------
@@ -327,11 +323,9 @@ BEGIN
     END
 */
 
-
     ----------------------------------------------------------------------
     -- Registrar traza del retiro
     ----------------------------------------------------------------------
-   print 'sigue nd sp_re_traza_retiroefectivo'
    exec @w_return =  cob_bvirtual..sp_re_traza_retiroefectivo
       @i_cupon        = @i_cupon
     , @i_cliente      = @i_cliente
@@ -358,24 +352,6 @@ BEGIN
         return 1
     end
 
-print 'listo para borrar w_estado %1!  @w_resultado %2!',@w_estado, @w_resultado
-    ----------------------------------------------------------------------
-    -- Si liberación exitosa, eliminar el registro vivo
-    ----------------------------------------------------------------------
-    if @w_estado in ('U','L') and @w_resultado = 'E'
-    begin
-print '@i_cupon %1!, @i_num_reserva %2!',@i_cupon,@i_num_reserva
-        delete from re_retiro_efectivo
-         where re_cupon       = @i_cupon
-           and re_num_reserva = @i_num_reserva
-
-        if @@error <> 0
-        begin
-            set @o_num_error = 160011
-            set @o_desc_error = 'Error al eliminar registro de re_retiro_efectivo'
-            return 1
-        end
-    end
     ----------------------------------------------------------------------
     -- Éxito
     ----------------------------------------------------------------------

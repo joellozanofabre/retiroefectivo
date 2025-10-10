@@ -16,11 +16,19 @@ IF EXISTS (SELECT 1
     DELETE cob_bvirtual..ESB_servicios
      WHERE us_nemonico = @w_nemonico
 
+-- Obtener el ID del servicio recién insertado
+SELECT @wus_servicio = us_servicio
+  FROM cob_bvirtual..ESB_servicios
+ WHERE us_nemonico = @w_nemonico
+
+IF @@ROWCOUNT <> 0
+BEGIN
     -- Eliminar detalle previo si existía
-    IF EXISTS (SELECT 1
-                 FROM cob_bvirtual..ESB_det_servicios
-                WHERE ud_servicio = @wus_servicio)
         DELETE cob_bvirtual..ESB_det_servicios
          WHERE ud_servicio = @wus_servicio
+END
 
-go
+
+SELECT *
+                 FROM cob_bvirtual..ESB_det_servicios
+                WHERE ud_servicio = @wus_servicio

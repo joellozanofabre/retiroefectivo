@@ -5,86 +5,107 @@ GO
    Inserts idempotentes en cl_errores
    ============================================================ */
 
--- Error 208110
-IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208110)
+-- Error 169257
+IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169257)
 BEGIN
     INSERT INTO cl_errores ( numero , severidad , mensaje )
-    VALUES                  ( 208110 , 0        , 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ' )
+    VALUES                  ( 169257 , 0        , 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ' )
 
-    PRINT '208110 insertado correctamente'
+    PRINT '169257 insertado correctamente'
 END
 ELSE
 BEGIN
-    PRINT 'Error 208110 ya existe, no se realiza ninguna acción'
+    PRINT 'Error 169257 ya existe, no se realiza ninguna acción'
 END
 GO
 
--- Error 208111
-IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208111)
+-- Error 169258
+IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169258)
 BEGIN
     INSERT INTO cl_errores ( numero , severidad , mensaje )
-    VALUES                  ( 208111 , 0        , 'ERROR AL INSERTAR EN TABLA RE_RETIRO_EFECTIVO.' )
+    VALUES                  ( 169258 , 0        , 'ERROR AL INSERTAR EN TABLA RE_RETIRO_EFECTIVO.' )
 
-    PRINT '208111 insertado correctamente'
+    PRINT '169258 insertado correctamente'
 END
 ELSE
 BEGIN
-    PRINT 'Error 208111 ya existe, no se realiza ninguna acción'
+    PRINT 'Error 169258 ya existe, no se realiza ninguna acción'
 END
 GO
 
--- Error 208112
-IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208112)
+-- Error 169259
+IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169259)
 BEGIN
     INSERT INTO cl_errores ( numero , severidad , mensaje )
-    VALUES                  ( 208112 , 0        , 'ERROR AL INSERTAR EN TABLA RE_HIS_RETIRO_EFECTIVO.' )
+    VALUES                  ( 169259 , 0        , 'ERROR AL INSERTAR EN TABLA RE_HIS_RETIRO_EFECTIVO.' )
 
-    PRINT '208112 insertado correctamente'
+    PRINT '169259 insertado correctamente.'
 END
 ELSE
 BEGIN
-    PRINT 'Error 208112 ya existe, no se realiza ninguna acción'
+    PRINT 'Error 169259 ya existe, no se realiza ninguna acción'
 END
 GO
 
--- Error 208113
-IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208113)
+-- Error 169260
+IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169260)
 BEGIN
     INSERT INTO cl_errores ( numero , severidad , mensaje )
-    VALUES                  ( 208113 , 0        , 'NO SE ENCONTRO EL NUMERO DE RESERVA.' )
+    VALUES                  ( 169260 , 0        , 'NO SE ENCONTRO EL NUMERO DE RESERVA.' )
 
-    PRINT '208113 insertado correctamente'
+    PRINT '169260 insertado correctamente'
 END
 ELSE
 BEGIN
-    PRINT 'Error 208113 ya existe, no se realiza ninguna acción'
+    PRINT 'Error 169260 ya existe, no se realiza ninguna acción'
 END
 GO
 
--- Error 208114
-IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 208114)
+-- Error 169261
+IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169261)
 BEGIN
     INSERT INTO cl_errores ( numero , severidad , mensaje )
-    VALUES                  ( 208114 , 0        , 'CUPON YA HA SIDO DESPIGNORADO.' )
+    VALUES                  ( 169261 , 0        , 'CUPON YA HA SIDO DESPIGNORADO.' )
 
-    PRINT '208114 insertado correctamente'
+    PRINT '169261 insertado correctamente'
 END
 ELSE
 BEGIN
-    PRINT 'Error 208114 ya existe, no se realiza ninguna acción'
+    PRINT 'Error 169261 ya existe, no se realiza ninguna acción'
 END
 GO
+
+-- Error 169261
+IF NOT EXISTS (SELECT 1 FROM cl_errores WHERE numero = 169262)
+BEGIN
+    INSERT INTO cl_errores ( numero , severidad , mensaje )
+    VALUES                  ( 169262 , 0        , 'NO SE HA PODIDO ACTUALIZAR TABLA re_retiro_efectivo.' )
+
+    PRINT '169262 insertado correctamente'
+END
+ELSE
+BEGIN
+    PRINT 'Error 169262 ya existe, no se realiza ninguna acción'
+END
+GO
+
+
+
+SELECT * FROM cl_errores WHERE numero in ( 169257,169258,169259,169260,169261,169262)
+
+
 
 /* ============================================================
    Inserción en catálogos (ahorros y corrientes)
+   para visualizar en frontend tadmin.
    ============================================================ */
 
-DECLARE 
+DECLARE
     @w_tabla   SMALLINT,
     @siguiente SMALLINT,
     @w_descrip VARCHAR(100)
 
-SET @w_descrip = '01 DIAS DE RESERVA PIGNORACION'
+SET @w_descrip = '01 DIAS RESERVA PIGNORACION'
 
 -- Catálogo de Ahorros
 SELECT @w_tabla = codigo
@@ -124,9 +145,15 @@ GO
 
 
 delete cl_catalogo_pro
-  from cl_tabla
- where tabla in 	('re_estados_transicion'   )
- and codigo = cp_tabla
+    where cp_tabla  in (select codigo from cl_tabla where tabla = 're_estados_transicion')
+
+
+delete cobis..cl_catalogo
+where tabla in (select codigo from cl_tabla where tabla = 're_estados_transicion')
+
+delete cobis..cl_tabla
+where codigo in (select codigo from cl_tabla where tabla = 're_estados_transicion')
+
 
 
 declare @w_codigo int
@@ -134,7 +161,9 @@ select @w_codigo = siguiente + 1
   from cl_seqnos
  where tabla = 'cl_tabla'
 
-insert into cl_tabla values (@w_codigo, 're_estados_transicion', 'Estados de transicion para procesos Retiro Efectivo', 'V', getdate(), 'admin')
+insert into cl_tabla values (@w_codigo, 're_estados_transicion', 'Estados de transicion para procesos Retiro Efectivo')
+
+
 insert into cl_catalogo_pro values ('G', @w_codigo)
 insert into cl_catalogo_pro values ('V', @w_codigo)
 insert into cl_catalogo_pro values ('X', @w_codigo)
@@ -142,11 +171,23 @@ insert into cl_catalogo_pro values ('U', @w_codigo)
 insert into cl_catalogo_pro values ('N', @w_codigo)
 insert into cl_catalogo_pro values ('E', @w_codigo)
 
-insert into cl_catalogo (tabla,codigo,valor,estado) values (@w_codigo,'GENERANDO','G','V')
-insert into cl_catalogo (tabla,codigo,valor,estado) values (@w_codigo,'VALIDANDO','V','V')
-insert into cl_catalogo (tabla,codigo,valor,estado) values (@w_codigo,'USADO','U','V')
-insert into cl_catalogo (tabla,codigo,valor,estado) values (@w_codigo,'EXPIRADO','X','V')
-insert into cl_catalogo (tabla,codigo,valor,estado) values (@w_codigo,'ANULADO','N','V')
-insert into cl_catalogo (tabla,codigo,valor,estado) values (@w_codigo,'ERROR','E','V')
+insert into cl_catalogo (tabla,valor,codigo,estado) values (@w_codigo,'ANULADO'  ,'N','V')
+insert into cl_catalogo (tabla,valor,codigo,estado) values (@w_codigo,'EXPIRADO' ,'X','V')
+insert into cl_catalogo (tabla,valor,codigo,estado) values (@w_codigo,'ERROR'    ,'E','V')
+insert into cl_catalogo (tabla,valor,codigo,estado) values (@w_codigo,'GENERADO' ,'G','V')
+insert into cl_catalogo (tabla,valor,codigo,estado) values (@w_codigo,'USADO'    ,'U','V')
+insert into cl_catalogo (tabla,valor,codigo,estado) values (@w_codigo,'VALIDANDO','V','V')
 
+
+
+update cobis..cl_seqnos     set siguiente = @w_codigo     where tabla = 'cl_tabla'
+
+
+SELECT *
+FROM cobis..cl_catalogo
+WHERE tabla = (SELECT codigo FROM cobis..cl_tabla WHERE tabla = 're_estados_transicion')
 GO
+
+select * from cobis..cl_catalogo_pro
+where cp_tabla = (select codigo from cobis..cl_tabla where tabla = 're_estados_transicion')
+go

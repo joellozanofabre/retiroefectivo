@@ -58,12 +58,13 @@ BEGIN
     -------------------------------------------------------------------------
     IF NOT EXISTS (SELECT 1
                      FROM re_retiro_efectivo
-                    WHERE re_cupon = @i_cupon)
+                    WHERE re_cupon = @i_cupon
+                    and re_estado  in ('G','V'))  --solo los generados o en validacion
     BEGIN
         SELECT @o_estado     = 'E',
-               @o_num_error  = 100,
-               @o_desc_error = 'CUPON NO EXISTE'
-        RETURN 1
+               @o_num_error  = 169260,
+               @o_desc_error = 'CUPÓN NO EXISTE'
+        RETURN @o_num_error
     END
 
     -------------------------------------------------------------------------
@@ -86,11 +87,10 @@ BEGIN
     IF @@ROWCOUNT = 0
     BEGIN
         SELECT @o_estado     = 'E',
-               @o_num_error  = 101,
-               @o_desc_error = 'ERROR EN LOS VALORES DEL CUPON'
-        RETURN 1
+               @o_num_error  =  169260,
+               @o_desc_error = 'ERROR EN LOS VALORES DEL CUPÓN'
+        RETURN @o_num_error
     END
---print '@w_id= %1! - @w_estado %2! - @w_hora_proc %3!', @w_id , @w_estado , @w_hora_proc
     -------------------------------------------------------------------------
     -- 3. Validar expiración (más de 24 horas)
     -------------------------------------------------------------------------
@@ -99,7 +99,7 @@ BEGIN
         print 'entra > 24 horas, expira cupón y lo mueve a histórico'
         UPDATE re_retiro_efectivo
         SET re_estado  = 'X',
-            re_detalle = 'CUPON EXPIRADO'
+            re_detalle = 'CUPÓN EXPIRADO'
         WHERE re_id = @w_id
 
         select @o_estado     = 'X'
@@ -120,9 +120,9 @@ BEGIN
     IF @w_estado NOT IN ('G')
     BEGIN
         SELECT @o_estado     = @w_estado,
-               @o_num_error  = 102,
+               @o_num_error  = 169261,
                @o_desc_error = 'Cupón no disponible para usar (Consumido o Expirado)'
-        RETURN 1
+        RETURN @o_num_error
     END
 
     -------------------------------------------------------------------------
@@ -130,7 +130,7 @@ BEGIN
     -------------------------------------------------------------------------
     UPDATE re_retiro_efectivo
     SET re_estado     = 'V',
-        re_detalle    = 'CUPON EN PROCESO DE VALIDACION',
+        re_detalle    = 'CUPÓN EN PROCESO DE VALIDACIÓN',
         re_fecha_proc = GETDATE()
     WHERE re_id = @w_id
       AND re_estado = 'G'
@@ -138,9 +138,9 @@ BEGIN
     IF @@ROWCOUNT = 0
     BEGIN
         SELECT @o_estado     = 'E',
-               @o_num_error  = 103,
-               @o_desc_error = 'Cupón tomado por otro proceso'
-        RETURN 1
+               @o_num_error  = 169262,
+               @o_desc_error = 'CUPÓN YA HA SIDO DESPIGNORADO'
+        RETURN @o_num_error
     END
 
 
@@ -163,9 +163,9 @@ BEGIN
         if @@error <> 0
         begin
             select @o_estado    = 'E',
-                @o_num_error = 500,
-                @o_desc_error = 'Error al mover cupón al histórico'
-            return 1
+                @o_num_error = 169259,
+                @o_desc_error = 'ERROR AL INSERTAR EN TABLA RE_HIS_RETIRO_EFECTIVO'
+            return @o_num_error
         end
 
     end

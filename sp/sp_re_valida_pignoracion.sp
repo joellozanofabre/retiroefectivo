@@ -1,3 +1,4 @@
+este no se usa
 use cob_bvirtual
 go
 

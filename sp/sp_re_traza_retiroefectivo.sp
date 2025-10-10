@@ -84,7 +84,7 @@ as
 
         if @@error <> 0
         begin
-            set @w_error = 208111
+            set @w_error = 169258
             goto ERROR_HANDLER
         end
 
@@ -107,7 +107,7 @@ as
 
         if @@error <> 0
         begin
-            set @w_error = 208112
+            set @w_error = 169259
             goto ERROR_HANDLER
         end
     end
@@ -134,7 +134,7 @@ as
 
     if @@error <> 0
     begin
-        set @w_error = 208111
+        set @w_error = 169258
         goto ERROR_HANDLER
     end
 

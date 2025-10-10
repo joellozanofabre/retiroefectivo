@@ -97,17 +97,12 @@ BEGIN
     --------------------------------------------------------------------------
     WHILE @@FETCH_STATUS = 0
     BEGIN
-print 'hay registros w_monto %1!',@w_monto
         ----------------------------------------------------------------------
         -- Iniciar transacción por cada cupón
         ----------------------------------------------------------------------
     BEGIN TRAN TRANSACCION_EXPIRA
 
 
-
-
-
-print 'x1 @w_monto %1!',@w_monto
         ----------------------------------------------------------------------
         -- 1. Obtener datos de sesión COBIS
         ----------------------------------------------------------------------
@@ -164,7 +159,6 @@ print 'x1 @w_monto %1!',@w_monto
                 , @o_reserva        = @w_reserva   OUT
                 , @o_num_error      = @w_return    OUTPUT
                 , @o_desc_error     = @w_msg_error OUTPUT
-print '2 @w_return %1!',@w_return
         ----------------------------------------------------------------------
         -- 3. Validar resultado de liberación
         ----------------------------------------------------------------------
@@ -173,7 +167,7 @@ print '2 @w_return %1!',@w_return
             SET @w_num_error  = @w_return
             SET @w_desc_error = 'Error en sp_re_libera_fondos: ' + @w_msg_error
 
-            PRINT 'ROLLBACK en sp_re_libera_fondos. Error: %1!' , @w_return
+            --PRINT 'ROLLBACK en sp_re_libera_fondos. Error: %1!' , @w_return
             IF @w_return != 160009 begin
             ROLLBACK TRAN TRANSACCION_EXPIRA
             GOTO Next_Cupon
@@ -208,15 +202,12 @@ print '2 @w_return %1!',@w_return
         BEGIN
             SET @w_num_error  = 500
             SET @w_desc_error = 'Error al insertar cupón en histórico re_his_retiro_efectivo'
-            print '@w_desc_error 1 %1!',@w_desc_error
             ROLLBACK TRAN TRANSACCION_EXPIRA
             GOTO Next_Cupon
         END
-print 'delete'
         ----------------------------------------------------------------------
         -- 6. Eliminar cupón de tabla vigente
         ----------------------------------------------------------------------
-        print '@w_id %1!',@w_id
         DELETE FROM re_retiro_efectivo
          WHERE re_id = @w_id
 
@@ -224,11 +215,9 @@ print 'delete'
         BEGIN
             SET @w_num_error  = 600
             SET @w_desc_error = 'Error al eliminar cupón en tabla re_retiro_efectivo'
-            print '@w_desc_error 2 %1!',@w_desc_error
             ROLLBACK TRAN TRANSACCION_EXPIRA
             GOTO Next_Cupon
         END
-print 'COMMIT'
         ----------------------------------------------------------------------
         -- Confirmar transacción por cupón
         ----------------------------------------------------------------------

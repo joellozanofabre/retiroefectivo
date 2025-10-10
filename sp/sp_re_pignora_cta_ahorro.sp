@@ -111,13 +111,14 @@ begin
     set @w_accion_traza = 'PIG'   --pignorado
     set @w_estado       = 'G'     --Generado
     if exists(select 1  from cob_ahorros..ah_cuenta_reservada
-              where cr_cuenta = @w_ah_cuenta   and cr_estado = 'R' and cr_tipo='P')
+              where cr_cuenta = @w_ah_cuenta
+              and cr_estado = 'R' and cr_tipo='P')
     begin
 
         select @o_num_error = 160004
               , @o_msg_error = 'YA TIENE UN CUPON VIGENTE. SOLO SE PERMITE UN CUPON A LA VEZ'
 
-        return 1
+        return @o_num_error
     end
 
 
@@ -161,6 +162,7 @@ begin
     if @w_return <> 0
     begin
         set @w_resultado = 'F'
+        set @w_descripcion = 'ERROR EN RESERVA DE FONDOS_AH /' + convert(varchar,@w_return)
         set @o_num_error = @w_return
     end
 
@@ -201,7 +203,7 @@ begin
         set @o_num_error = @w_cod_error
         set @o_msg_error = @w_msg_error
 
-        return 1
+        return @o_num_error
     end
 
 

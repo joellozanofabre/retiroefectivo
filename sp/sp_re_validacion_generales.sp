@@ -13,13 +13,15 @@ GO
 CREATE PROCEDURE sp_re_validacion_generales
 (
       @i_cuenta_banco   cuenta
-    , @i_monto          money
+    , @i_monto          money        = null
+    , @i_cupon          varchar(80)  = null-- Cupón generado
     , @i_moneda_iso     CHAR(3)
     , @o_cliente        INT            OUTPUT
     , @o_tipo_cuenta    cuenta         OUTPUT
     , @o_moneda         SMALLINT       OUTPUT
     , @o_idcuenta       INT       = 0  OUTPUT
     , @o_msg_error      VARCHAR(255)   OUTPUT
+    , @o_estado         CHAR(1)    = 'E' OUTPUT  -- agregado para retorno explícito
     , @o_num_error      INT            OUTPUT  -- agregado para retorno explícito
 )
 AS
@@ -30,10 +32,10 @@ DECLARE
     , @w_return        INT
     , @w_cod_cliente   INT
     , @w_moneda        SMALLINT
+    , @w_monto         decimal
+
 
     SET @w_tipo_ente = NULL
-
-
 
     ----------------------------------------------------------------------
     -- Verificar productos habilitados
@@ -51,16 +53,19 @@ DECLARE
     -- Validar que el cupon vigente no se repita. No puede haber otro cupon
     -- igual pendiente de retiro, o pendiente de aplicación,
     ----------------------------------------------------------------------
-    IF NOT EXISTS (SELECT 1
-                     FROM re_retiro_efectivo
-                    WHERE re_cupon = @i_cupon)
-    BEGIN
-        SELECT @o_estado     = 'E',
-               @o_num_error  = 100,
-               @o_desc_error = 'CUPON YA EXISTE'
-        RETURN 1
-    END
-
+    if  @i_cupon is not null
+    Begin
+        IF  EXISTS (SELECT 1
+                        FROM re_retiro_efectivo
+                        WHERE re_cupon = @i_cupon
+                        and re_estado in ('P','R'))  --si esta fallido y se quedo en tabla de trabajo ignorar
+        BEGIN
+            SELECT @o_estado     = 'E',
+                @o_num_error  = 169257,
+                @o_msg_error = 'YA TIENE UN CUPON VIGENTE'
+            RETURN @o_num_error
+        END
+    end
 
     ----------------------------------------------------------------------
     -- Validar moneda
@@ -107,21 +112,23 @@ DECLARE
     begin
         select @o_num_error = 708150,
                @o_msg_error = 'CAMPO REQUERIDO - CUENTA DE BANCO'
-    return 1
+    return @o_num_error
     end
 
     ----------------------------------------------------------------------
-    -- Validación de monto negativo
+    -- Validación de monto negativo. Para consultas de bloqueo, el monto es null
     ----------------------------------------------------------------------
-    EXEC @w_return = cob_remesas..sp_valida_valor_negativo
-         @i_val_otro = @i_monto
-
-    IF @w_return <> 0
+    if @i_monto is not null
     BEGIN
-        SELECT @o_num_error = @w_return
-        RETURN @o_num_error
-    END
+        EXEC @w_return = cob_remesas..sp_valida_valor_negativo
+            @i_val_otro = @i_monto
 
+        IF @w_return <> 0
+        BEGIN
+            SELECT @o_num_error = @w_return
+            RETURN @o_num_error
+        END
+    END
 
     ----------------------------------------------------------------------
     -- Determinar el tipo de producto (Ahorros o Corriente)
@@ -143,6 +150,7 @@ DECLARE
         RETURN @o_num_error
     END
 
+
     SELECT @o_idcuenta = @w_id_cuenta
 
     IF @w_moneda <> @o_moneda
@@ -151,6 +159,7 @@ DECLARE
                @o_msg_error = 'MONEDA DE CUENTA NO COINCIDE CON MONEDA INGRESADA'
         RETURN @o_num_error
     END
+
     ----------------------------------------------------------------------
     -- Validar el tipo de cliente
     ----------------------------------------------------------------------
@@ -172,10 +181,22 @@ DECLARE
 
     IF @w_tipo_ente <> 'P'
     BEGIN
-        SELECT @o_num_error = 160007,
+        SELECT @o_num_error = 169268,
                @o_msg_error = 'CLIENTE NO ES PERSONA NATURAL'
         RETURN @o_num_error
     END
+
+
+    set @w_monto = @i_monto
+    if (@i_moneda_iso = 'NIO')
+    begin
+        if (@w_monto % 100 != 0)
+            begin
+                select @o_num_error = 169267,
+                    @o_msg_error = "EL VALOR SOLICITADO NO ES VÁLIDO. SOLO SE PERMITEN MÚLTIPLOS DE 100"
+                return @o_num_error
+        end
+    end
 
     ----------------------------------------------------------------------
     -- Éxito

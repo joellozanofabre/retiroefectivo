@@ -100,7 +100,6 @@ begin
         , @w_accion_traza       char(3)
         , @w_pro_bancario       smallint
         , @w_fecha_proceso      datetime
-        , @w_detalle_resultado  varchar(100)
         , @w_msg_error          varchar(100)
         , @w_nombre_sp          varchar(50)
         , @w_descripcion        varchar(100)
@@ -114,9 +113,8 @@ begin
     -- Inicialización de variables
     ----------------------------------------------------------------------
     set @w_resultado         = 'E'
-    set @w_detalle_resultado = 'LIBERACION DE CUPON ' + @i_cupon
     set @w_nombre_sp         = 'sp_re_libera_fondos'
-    set @w_descripcion       = 'LIBERACION DE VALOR RESERVADO - RETIRO DE EFECTIVO SIN TD'
+    set @w_descripcion       = 'LIBERACIÓN DE VALOR RESERVADO - RETIRO DE EFECTIVO SIN TD CUPÓN: /' + @i_cupon
     set @w_accion_traza      = 'DPG'   -- Despignorado
     set @w_estado            = 'L'     -- L=liberado, E=error, U=usado, etc.
     set @w_valor_comision    = 0
@@ -125,7 +123,7 @@ begin
     set @w_num_reserva       = @i_sec
 
     if @i_descripcion is not null
-    set @w_descripcion = @i_descripcion
+       set @w_descripcion = @i_descripcion
     ----------------------------------------------------------------------
     -- Determinar producto bancario según tipo de cuenta
     ----------------------------------------------------------------------
@@ -166,15 +164,15 @@ begin
                       and hr_tipo        = 'P'
                       and hr_valor       = @i_valor_pignorar)
         begin
-            set @o_num_error = 160009
+            set @o_num_error = 169264
             set @o_desc_error = 'CUPON YA HA SIDO LIBERADO'
             return @o_num_error
         end
     end
     else
     begin
-        set @o_num_error = 160010
-        set @o_desc_error = 'Tipo de cuenta no válido'
+        set @o_num_error = 258003
+        set @o_desc_error = ' TIPO DE CUENTA NO PERMITIDO PARA LIBERACION DE FONDOS'
         return @o_num_error
     end
 
@@ -227,9 +225,9 @@ begin
     if @w_return <> 0
     begin
         set @o_num_error = @w_return
-        set @o_desc_error = @w_rpc + ' - Error al realizar el débito en la cuenta: ' + @i_cuenta
+        set @o_desc_error = @w_rpc + ' - ERROR AL REALIZAR EL DÉBITO EN LA CUENTA: ' + @i_cuenta
         set @w_resultado = 'F'
-        return @o_num_error
+       -- return @o_num_error
     end
 
 
@@ -263,16 +261,6 @@ begin
         return @w_return
     end
 
-    print 'El cupón está Liberado, se procede a eliminar de tabla vigente re_retiro_efectivo'
-    DELETE FROM re_retiro_efectivo
-    WHERE re_cupon = @i_cupon
-
-    IF @@error <> 0
-    BEGIN
-        SET @o_num_error  = 600
-        SET @o_desc_error = 'Error al eliminar cupón liberado en tabla re_retiro_efectivo'
-        RETURN 1
-    END
 
 
     return @w_return
