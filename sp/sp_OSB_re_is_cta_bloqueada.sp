@@ -153,18 +153,17 @@ go
 -- PERMISOS DE EJECUCIÓN
 -------------------------------------------------------------------------------
 IF (ROLE_ID('Service_Rol_Dev') > 0)
-    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol_Dev
+    GRANT EXECUTE ON dbo.sp_OSB_re_is_cta_bloqueada TO Service_Rol_Dev
 
 IF (ROLE_ID('Service_Rol_QA') > 0)
-    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol_QA
+    GRANT EXECUTE ON dbo.sp_OSB_re_is_cta_bloqueada TO Service_Rol_QA
 
 IF (ROLE_ID('Service_Rol') > 0)
-    GRANT EXECUTE ON dbo.sp_OSB_re_despignorar TO Service_Rol
+    GRANT EXECUTE ON dbo.sp_OSB_re_is_cta_bloqueada TO Service_Rol
 GO
 
-EXEC sp_procxmode 'dbo.sp_OSB_re_despignorar', 'anymode'
+EXEC sp_procxmode 'dbo.sp_OSB_re_is_cta_bloqueada', 'anymode'
 GO
-
 
 if object_id('dbo.sp_OSB_re_is_cta_bloqueada') is not null
     print '<<< CREATED PROCEDURE dbo.sp_OSB_re_is_cta_bloqueada >>>'

@@ -25,11 +25,12 @@ GO
 
 DECLARE
     @wus_servicio INT,
-    @w_nemonico   VARCHAR(20)
+    @w_nemonico   VARCHAR(20),
+    @w_causa      varchar(5)
 
 -- Transacción de desembolsos
 SET @w_nemonico = 'RESTD'
-
+set @w_causa    = '740'
 -- Limpieza previa: eliminar si ya existe
 IF EXISTS (SELECT 1
              FROM cob_bvirtual..ESB_servicios
@@ -58,69 +59,47 @@ BEGIN
     ------------------------------------------------------------------------
     -- Ahorros - Córdobas
     ------------------------------------------------------------------------
-    INSERT INTO cob_bvirtual..ESB_det_servicios
-          (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
-           ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
-    VALUES (@wus_servicio, 'AHO', 'C', 'NIO', 253,
-            '14',        'REVERSO RETIRO DE EFECTIVO SIN TD - CREDITO AHORRO CORDOBAS',
-            'S', 'V')
+
 
     INSERT INTO cob_bvirtual..ESB_det_servicios
           (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
            ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
     VALUES (@wus_servicio, 'AHO', 'D', 'NIO', 264,
-            '17',        'RETIRO RETIRO DE EFECTIVO SIN TD - CREDITO AHORRO CORDOBAS',
+            @w_causa ,        'ND RETIRO DE EFECTIVO SIN TD - AHO CORDOBAS',
             'N', 'V')
 
     ------------------------------------------------------------------------
     -- Ahorros - Dólares
     ------------------------------------------------------------------------
-    INSERT INTO cob_bvirtual..ESB_det_servicios
-          (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
-           ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
-    VALUES (@wus_servicio, 'AHO', 'C', 'USD', 253,
-            '166',       'REVERSO RETIRO DE EFECTIVO SIN TD - CREDITO AHORRO DOLARES',
-            'S', 'V')
+
 
     INSERT INTO cob_bvirtual..ESB_det_servicios
           (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
            ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
     VALUES (@wus_servicio, 'AHO', 'D', 'USD', 264,
-            '17',        'RETIRO RETIRO DE EFECTIVO SIN TD - CREDITO AHORRO USD',
+            @w_causa ,        'ND RETIRO DE EFECTIVO SIN TD - AHO USD',
             'N', 'V')
 
     ------------------------------------------------------------------------
     -- Cuentas Corrientes - Córdobas
     ------------------------------------------------------------------------
-    INSERT INTO cob_bvirtual..ESB_det_servicios
-          (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
-           ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
-    VALUES (@wus_servicio, 'CTE', 'C', 'NIO', 48,
-            '536',       'REVERSO - RETIRO DE EFECTIVO SIN TD - CORDOBAS',
-            'S', 'V')
 
     INSERT INTO cob_bvirtual..ESB_det_servicios
           (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
            ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
     VALUES (@wus_servicio, 'CTE', 'D', 'NIO', 50,
-            '507',       'RETIRO DE EFECTIVO SIN TD - CORDOBAS',
+            @w_causa ,       'ND RETIRO DE EFECTIVO SIN TD - CTE CORDOBAS',
             'N', 'V')
 
     ------------------------------------------------------------------------
     -- Cuentas Corrientes - Dólares
     ------------------------------------------------------------------------
-    INSERT INTO cob_bvirtual..ESB_det_servicios
-          (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
-           ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
-    VALUES (@wus_servicio, 'CTE', 'C', 'USD', 48,
-            '446',       'REVERSO RETIRO DE EFECTIVO SIN TD - DOLARES',
-            'S', 'V')
 
     INSERT INTO cob_bvirtual..ESB_det_servicios
           (ud_servicio, ud_producto, ud_operacion, ud_moneda, ud_transaccion,
            ud_causa,    ud_descripcion, ud_reintegro, ud_estado)
     VALUES (@wus_servicio, 'CTE', 'D', 'USD', 50,
-            '447',       'RETIRO RETIRO DE EFECTIVO SIN TD - DOLARES',
+            @w_causa ,       'ND RETIRO DE EFECTIVO SIN TD - CTE  USD',
             'N', 'V')
 END
 ELSE
